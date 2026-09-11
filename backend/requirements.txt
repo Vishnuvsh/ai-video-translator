@@ -2,3 +2,6 @@ fastapi
 uvicorn
 pydantic
 pydantic-settings
+yt-dlp
+openai
+pydub
