@@ -37,3 +37,26 @@ class VideoTranscribeResponse(BaseModel):
     video_id: str
     language: str
     transcript: str
+
+class VideoTranslateRequest(BaseModel):
+    transcript: str
+    source_language: str
+    target_languages: list[str]
+
+    @field_validator("transcript")
+    @classmethod
+    def transcript_must_not_be_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Transcript cannot be empty")
+        return v.strip()
+
+    @field_validator("target_languages")
+    @classmethod
+    def target_languages_must_not_be_empty(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("Must select at least one target language")
+        return v
+
+class VideoTranslateResponse(BaseModel):
+    success: bool
+    translations: dict[str, str]
