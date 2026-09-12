@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
-from app.schemas.video import VideoAnalyzeRequest, VideoAnalyzeResponse, VideoMetadata, VideoTranscribeRequest, VideoTranscribeResponse
+from app.schemas.video import VideoAnalyzeRequest, VideoAnalyzeResponse, VideoMetadata, VideoTranscribeRequest, VideoTranscribeResponse, VideoTranslateRequest, VideoTranslateResponse
 from app.services.youtube_service import extract_video_id, is_youtube_url, fetch_video_metadata, download_audio
 from app.services.transcription_service import transcribe_audio
+from app.services.translation_service import translate_transcript
 
 router = APIRouter()
 
@@ -82,4 +83,25 @@ async def transcribe_video(request: VideoTranscribeRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Transcription failed: {str(e)}"
+        )
+
+@router.post("/translate", response_model=VideoTranslateResponse)
+async def translate_video_transcript(request: VideoTranslateRequest):
+    """
+    Translate the transcript into the selected target languages.
+    """
+    try:
+        translations = translate_transcript(
+            transcript=request.transcript,
+            source_language=request.source_language,
+            target_languages=request.target_languages
+        )
+        return VideoTranslateResponse(
+            success=True,
+            translations=translations
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Translation failed: {str(e)}"
         )
