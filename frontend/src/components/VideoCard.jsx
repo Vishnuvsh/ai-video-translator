@@ -1,4 +1,5 @@
 import React from 'react';
+import TranslationSection from './TranslationSection';
 
 const VideoCard = ({ video, onReset, onTranscribe, transcribeState, transcriptData }) => {
   const isTranscribing = transcribeState === 'preparing' || transcribeState === 'transcribing';
@@ -87,6 +88,10 @@ const VideoCard = ({ video, onReset, onTranscribe, transcribeState, transcriptDa
             </button>
           </div>
         </div>
+      )}
+
+      {transcriptData && (
+        <TranslationSection transcriptData={transcriptData} />
       )}
     </div>
   );
