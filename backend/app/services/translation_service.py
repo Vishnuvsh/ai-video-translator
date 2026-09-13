@@ -47,7 +47,7 @@ def translate_transcript(transcript: str, source_language: str, target_languages
                 )
                 
                 response = client.chat.completions.create(
-                    model="llama3-70b-8192",  # Default Groq model for general NLP tasks
+                    model="openai/gpt-oss-120b",  # Model available on current Groq account
                     messages=[
                         {"role": "system", "content": "You are a professional video transcript translator."},
                         {"role": "user", "content": prompt}
