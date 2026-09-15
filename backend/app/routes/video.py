@@ -1,8 +1,11 @@
 from fastapi import APIRouter, HTTPException
-from app.schemas.video import VideoAnalyzeRequest, VideoAnalyzeResponse, VideoMetadata, VideoTranscribeRequest, VideoTranscribeResponse, VideoTranslateRequest, VideoTranslateResponse
+from fastapi.responses import FileResponse
+from app.schemas.video import VideoAnalyzeRequest, VideoAnalyzeResponse, VideoMetadata, VideoTranscribeRequest, VideoTranscribeResponse, VideoTranslateRequest, VideoTranslateResponse, VideoTTSRequest, VideoTTSResponse
 from app.services.youtube_service import extract_video_id, is_youtube_url, fetch_video_metadata, download_audio
 from app.services.transcription_service import transcribe_audio
 from app.services.translation_service import translate_transcript
+from app.services.tts_service import generate_speech, get_audio_path
+import os
 
 router = APIRouter()
 
@@ -105,3 +108,43 @@ async def translate_video_transcript(request: VideoTranslateRequest):
             status_code=500,
             detail=f"Translation failed: {str(e)}"
         )
+
+@router.post("/tts", response_model=VideoTTSResponse)
+async def generate_video_tts(request: VideoTTSRequest):
+    """
+    Generate Text-to-Speech using OpenAI.
+    """
+    # Simple validation of supported voices
+    supported_voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+    voice = request.voice if request.voice in supported_voices else "alloy"
+    
+    try:
+        filename = generate_speech(
+            text=request.text,
+            language=request.language,
+            voice=voice
+        )
+        return VideoTTSResponse(
+            success=True,
+            language=request.language,
+            audio_url=f"/api/video/audio/{filename}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Voice generation failed: {str(e)}"
+        )
+
+@router.get("/audio/{filename}")
+async def get_audio_file(filename: str):
+    """
+    Serve generated audio file safely.
+    """
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+        
+    file_path = get_audio_path(filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Audio file not found.")
+        
+    return FileResponse(file_path, media_type="audio/mpeg", filename=filename)
