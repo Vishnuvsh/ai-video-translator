@@ -60,3 +60,20 @@ class VideoTranslateRequest(BaseModel):
 class VideoTranslateResponse(BaseModel):
     success: bool
     translations: dict[str, str]
+
+class VideoTTSRequest(BaseModel):
+    text: str
+    language: str
+    voice: Optional[str] = "alloy"
+    
+    @field_validator("text")
+    @classmethod
+    def text_must_not_be_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Text cannot be empty")
+        return v.strip()
+
+class VideoTTSResponse(BaseModel):
+    success: bool
+    language: str
+    audio_url: str
