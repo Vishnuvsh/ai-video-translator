@@ -121,7 +121,7 @@ const TranslationSection = ({ transcriptData }) => {
             <label key={lang.code} className="flex items-center space-x-2 cursor-pointer">
               <input
                 type="checkbox"
-                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
                 checked={selectedLanguages.includes(lang.code)}
                 onChange={() => handleLanguageToggle(lang.code)}
                 disabled={isTranslating}
@@ -135,7 +135,7 @@ const TranslationSection = ({ transcriptData }) => {
       <button
         onClick={handleTranslate}
         disabled={isTranslating || selectedLanguages.length === 0}
-        className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-6 rounded-lg shadow transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+        className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white font-medium py-2.5 px-6 rounded-lg shadow transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
       >
         {isTranslating ? 'Translating...' : 'Translate Transcript'}
       </button>
@@ -148,7 +148,7 @@ const TranslationSection = ({ transcriptData }) => {
             <h4 className="text-lg font-bold text-gray-900">Translated Versions</h4>
             <button
               onClick={handleGenerateAllVoices}
-              className="text-sm bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-medium py-1.5 px-4 rounded transition"
+              className="text-sm bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 font-medium py-1.5 px-4 rounded transition"
             >
               Generate All Voices
             </button>
@@ -180,7 +180,7 @@ const TranslationSection = ({ transcriptData }) => {
                       <button
                         onClick={() => handleGenerateVoice(langCode, text)}
                         disabled={generatingVoices[langCode]}
-                        className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-1.5 px-3 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="text-xs bg-amber-600 hover:bg-amber-700 text-white font-medium py-1.5 px-3 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {generatingVoices[langCode] ? 'Generating voice...' : 'Generate Voice'}
                       </button>
@@ -198,7 +198,7 @@ const TranslationSection = ({ transcriptData }) => {
 
                 {/* Audio Player */}
                 {audioFiles[langCode] && (
-                  <div className="mt-4 p-4 bg-indigo-50 rounded-lg border border-indigo-100 flex flex-col sm:flex-row items-center gap-4">
+                  <div className="mt-4 p-4 bg-amber-50 rounded-lg border border-amber-100 flex flex-col sm:flex-row items-center gap-4">
                     <audio 
                       controls 
                       src={getFullAudioUrl(audioFiles[langCode])} 
@@ -209,7 +209,7 @@ const TranslationSection = ({ transcriptData }) => {
                       download={`ai-video-translator-${langName.toLowerCase()}.mp3`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded shadow transition text-center whitespace-nowrap w-full sm:w-auto"
+                      className="text-sm bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded shadow transition text-center whitespace-nowrap w-full sm:w-auto"
                     >
                       Download Audio
                     </a>

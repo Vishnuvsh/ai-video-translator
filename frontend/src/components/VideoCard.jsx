@@ -52,7 +52,7 @@ const VideoCard = ({ video, onReset, onTranscribe, transcribeState, transcriptDa
         <button 
           onClick={onTranscribe}
           disabled={isTranscribing || transcribeState === 'done'}
-          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-lg shadow transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-medium py-2.5 px-4 rounded-lg shadow transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isTranscribing ? 'Transcribing...' : transcribeState === 'done' ? 'Transcription Complete' : 'Transcribe Video'}
         </button>
@@ -67,7 +67,7 @@ const VideoCard = ({ video, onReset, onTranscribe, transcribeState, transcriptDa
       {transcriptData && (
         <div className="mt-6 border-t pt-6 border-gray-100 text-left animate-fade-in-up">
           <h3 className="text-xl font-bold text-gray-900 mb-1">Transcript</h3>
-          <p className="text-sm text-indigo-600 font-semibold mb-4">
+          <p className="text-sm text-amber-600 font-semibold mb-4">
             Detected Language: <span className="uppercase">{transcriptData.language}</span>
           </p>
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 max-h-60 overflow-y-auto mb-4 whitespace-pre-wrap text-sm text-gray-700 font-sans leading-relaxed">

@@ -76,11 +76,11 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex-shrink-0 flex items-center">
-              <span className="font-bold text-xl text-indigo-600">AI Video Translator</span>
+              <span className="font-bold text-xl text-amber-600">AI Video Translator</span>
             </div>
             <nav className="flex space-x-4">
-              <a href="#" className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">Home</a>
-              <a href="#" className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">About</a>
+              <a href="#" className="text-gray-700 hover:text-amber-600 px-3 py-2 rounded-md text-sm font-medium">Home</a>
+              <a href="#" className="text-gray-700 hover:text-amber-600 px-3 py-2 rounded-md text-sm font-medium">About</a>
             </nav>
           </div>
         </div>
@@ -90,7 +90,7 @@ function App() {
       <main className="flex-grow flex flex-col items-center justify-center p-6 text-center">
         <div className="max-w-3xl w-full">
           <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
-            Translate Videos Into <span className="text-indigo-600">Any Language</span>
+            Translate Videos Into <span className="text-amber-600">Any Language</span>
           </h1>
           <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
             Convert spoken content from videos into text and make it available in the language you understand.
@@ -102,7 +102,7 @@ function App() {
                 <input 
                   type="text" 
                   placeholder="https://www.youtube.com/watch?v=..." 
-                  className="flex-grow px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-gray-700 disabled:bg-gray-100"
+                  className="flex-grow px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition text-gray-700 disabled:bg-gray-100"
                   value={videoUrl}
                   onChange={(e) => setVideoUrl(e.target.value)}
                   disabled={isLoading}
@@ -110,7 +110,7 @@ function App() {
                 <button 
                   onClick={handleAnalyze}
                   disabled={isLoading || !videoUrl}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-6 rounded-lg shadow transition duration-200 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-medium py-3 px-6 rounded-lg shadow transition duration-200 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? 'Analyzing...' : 'Analyze Video'}
                 </button>
