@@ -73,16 +73,16 @@ const VideoCard = ({ video, onReset, onTranscribe, transcribeState, transcriptDa
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 max-h-60 overflow-y-auto mb-4 whitespace-pre-wrap text-sm text-gray-700 font-sans leading-relaxed">
             {transcriptData.transcript}
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <button 
               onClick={copyToClipboard}
-              className="text-sm bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded transition shadow-sm"
+              className="text-sm w-full sm:w-auto bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded transition shadow-sm text-center"
             >
               Copy Transcript
             </button>
             <button 
               onClick={downloadTranscript}
-              className="text-sm bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded transition shadow-sm"
+              className="text-sm w-full sm:w-auto bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded transition shadow-sm text-center"
             >
               Download Transcript
             </button>
