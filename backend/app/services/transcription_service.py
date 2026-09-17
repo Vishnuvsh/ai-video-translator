@@ -61,24 +61,40 @@ def transcribe_audio(file_path: str) -> dict:
                 elif isinstance(transcription, dict) and 'language' in transcription:
                     detected_language = transcription['language']
         else:
-            # Chunking logic
-            audio = AudioSegment.from_file(file_path)
-            duration_ms = len(audio)
+            # Chunking logic using ffmpeg (avoiding pydub/audioop which crashes on Python 3.14)
+            import subprocess
+            
+            # Get duration using ffprobe
+            try:
+                cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", file_path]
+                result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+                duration_sec = float(result.stdout.strip())
+            except Exception as e:
+                raise RuntimeError(f"Failed to get audio duration: {str(e)}")
             
             # Approximate chunk duration based on size (target 20MB chunks)
             chunk_target_size = 20 * 1024 * 1024
             num_chunks = math.ceil(file_size / chunk_target_size)
-            chunk_length_ms = duration_ms // num_chunks
+            chunk_length_sec = duration_sec / num_chunks
             
             chunk_files = []
             try:
                 for i in range(num_chunks):
-                    start_ms = i * chunk_length_ms
-                    end_ms = min((i + 1) * chunk_length_ms, duration_ms)
-                    chunk = audio[start_ms:end_ms]
+                    start_sec = i * chunk_length_sec
                     
                     chunk_path = f"{file_path}_chunk_{i}.mp3"
-                    chunk.export(chunk_path, format="mp3")
+                    
+                    # Extract chunk using ffmpeg copy
+                    try:
+                        ext_cmd = ["ffmpeg", "-y", "-i", file_path, "-ss", str(start_sec), "-t", str(chunk_length_sec), "-c", "copy", chunk_path]
+                        subprocess.run(ext_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                    except subprocess.CalledProcessError as e:
+                        try:
+                            err_msg = e.stderr.decode()
+                        except:
+                            err_msg = str(e)
+                        raise RuntimeError(f"Failed to extract chunk {i}: {err_msg}")
+                        
                     chunk_files.append(chunk_path)
                     
                     with open(chunk_path, "rb") as chunk_file:
@@ -88,7 +104,7 @@ def transcribe_audio(file_path: str) -> dict:
                             response_format="verbose_json"
                         )
                         full_transcript += transcription.text + " "
-                        all_segments.extend(_extract_segments(transcription, time_offset=start_ms / 1000.0))
+                        all_segments.extend(_extract_segments(transcription, time_offset=start_sec))
                         
                         if i == 0:
                             if hasattr(transcription, 'language'):

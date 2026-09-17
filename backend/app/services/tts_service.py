@@ -1,7 +1,6 @@
 import os
 import uuid
 import math
-from pydub import AudioSegment
 from openai import OpenAI
 
 # 4096 is the max characters for OpenAI TTS API
