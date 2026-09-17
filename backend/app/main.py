@@ -11,11 +11,11 @@ from app.routes import video
 
 app = FastAPI(title="AI Video Translator API")
 
-# Configure CORS for local development
+# Configure CORS for all environments
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"], # React/Vite default ports
-    allow_credentials=True,
+    allow_origins=["*"], # Allow all origins
+    allow_credentials=False, # Must be False when allow_origins is ["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
