@@ -144,11 +144,11 @@ const TranslationSection = ({ transcriptData }) => {
 
       {translations && Object.keys(translations).length > 0 && (
         <div className="mt-8 space-y-6">
-          <div className="flex justify-between items-center border-b pb-2">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-2 gap-3 sm:gap-0">
             <h4 className="text-lg font-bold text-gray-900">Translated Versions</h4>
             <button
               onClick={handleGenerateAllVoices}
-              className="text-sm bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 font-medium py-1.5 px-4 rounded transition"
+              className="w-full sm:w-auto text-sm bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 font-medium py-1.5 px-4 rounded transition text-center"
             >
               Generate All Voices
             </button>
@@ -159,30 +159,30 @@ const TranslationSection = ({ transcriptData }) => {
             const langName = getLanguageName(langCode);
             return (
               <div key={langCode} className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
-                <div className="flex justify-between items-center mb-3">
-                  <h5 className="font-semibold text-gray-900 text-lg">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3 md:gap-0">
+                  <h5 className="font-semibold text-gray-900 text-lg mb-1 md:mb-0">
                     {langName} {isErrorText ? '✕' : '✓'}
                   </h5>
-                  <div className="flex space-x-2">
+                  <div className="flex flex-wrap gap-2 w-full md:w-auto">
                     <button
                       onClick={() => copyToClipboard(text)}
-                      className="text-xs bg-gray-50 border border-gray-300 hover:bg-gray-100 text-gray-700 font-medium py-1.5 px-3 rounded transition"
+                      className="flex-1 md:flex-none text-center text-xs bg-gray-50 border border-gray-300 hover:bg-gray-100 text-gray-700 font-medium py-1.5 px-3 rounded transition"
                     >
                       Copy
                     </button>
                     <button
                       onClick={() => downloadTranslation(text, langCode)}
-                      className="text-xs bg-gray-50 border border-gray-300 hover:bg-gray-100 text-gray-700 font-medium py-1.5 px-3 rounded transition"
+                      className="flex-1 md:flex-none text-center text-xs bg-gray-50 border border-gray-300 hover:bg-gray-100 text-gray-700 font-medium py-1.5 px-3 rounded transition"
                     >
-                      Download Text
+                      Download
                     </button>
                     {!isErrorText && (
                       <button
                         onClick={() => handleGenerateVoice(langCode, text)}
                         disabled={generatingVoices[langCode]}
-                        className="text-xs bg-amber-600 hover:bg-amber-700 text-white font-medium py-1.5 px-3 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full sm:flex-1 md:flex-none text-center text-xs bg-amber-600 hover:bg-amber-700 text-white font-medium py-1.5 px-3 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {generatingVoices[langCode] ? 'Generating voice...' : 'Generate Voice'}
+                        {generatingVoices[langCode] ? 'Generating...' : 'Generate Voice'}
                       </button>
                     )}
                   </div>
@@ -191,9 +191,11 @@ const TranslationSection = ({ transcriptData }) => {
                   {text}
                 </div>
                 
-                {/* Voice Error Display */}
+                {/* Voice Message Display */}
                 {voiceErrors[langCode] && (
-                  <p className="text-red-500 text-sm mb-3">{voiceErrors[langCode]}</p>
+                  <p className={`text-sm mb-3 ${voiceErrors[langCode].includes('future update') ? 'text-blue-600 bg-blue-50 p-2 rounded border border-blue-100' : 'text-red-500'}`}>
+                    {voiceErrors[langCode].includes('future update') ? voiceErrors[langCode].replace('Voice generation failed: ', '') : voiceErrors[langCode]}
+                  </p>
                 )}
 
                 {/* Audio Player */}
