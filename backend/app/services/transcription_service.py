@@ -19,8 +19,32 @@ def transcribe_audio(file_path: str) -> dict:
         file_size = os.path.getsize(file_path)
         client = OpenAI()
         
+        def _extract_segments(transcription_obj, time_offset=0.0):
+            extracted = []
+            segments_raw = []
+            if hasattr(transcription_obj, 'segments') and transcription_obj.segments:
+                segments_raw = transcription_obj.segments
+            elif isinstance(transcription_obj, dict) and 'segments' in transcription_obj:
+                segments_raw = transcription_obj['segments']
+                
+            for seg in segments_raw:
+                if isinstance(seg, dict):
+                    extracted.append({
+                        "start": seg.get("start", 0.0) + time_offset,
+                        "end": seg.get("end", 0.0) + time_offset,
+                        "text": seg.get("text", "").strip()
+                    })
+                else:
+                    extracted.append({
+                        "start": getattr(seg, "start", 0.0) + time_offset,
+                        "end": getattr(seg, "end", 0.0) + time_offset,
+                        "text": getattr(seg, "text", "").strip()
+                    })
+            return extracted
+        
         full_transcript = ""
         detected_language = "unknown"
+        all_segments = []
 
         if file_size <= MAX_SIZE_BYTES:
             # Process directly
@@ -31,6 +55,7 @@ def transcribe_audio(file_path: str) -> dict:
                     response_format="verbose_json"
                 )
                 full_transcript = transcription.text
+                all_segments.extend(_extract_segments(transcription))
                 if hasattr(transcription, 'language'):
                     detected_language = transcription.language
                 elif isinstance(transcription, dict) and 'language' in transcription:
@@ -63,6 +88,7 @@ def transcribe_audio(file_path: str) -> dict:
                             response_format="verbose_json"
                         )
                         full_transcript += transcription.text + " "
+                        all_segments.extend(_extract_segments(transcription, time_offset=start_ms / 1000.0))
                         
                         if i == 0:
                             if hasattr(transcription, 'language'):
@@ -76,7 +102,8 @@ def transcribe_audio(file_path: str) -> dict:
 
         return {
             "transcript": full_transcript.strip(),
-            "language": detected_language
+            "language": detected_language,
+            "segments": all_segments
         }
     except Exception as e:
         raise RuntimeError(f"Transcription failed: {str(e)}")

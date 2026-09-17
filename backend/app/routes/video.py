@@ -75,7 +75,8 @@ async def transcribe_video(request: VideoTranscribeRequest):
             success=True,
             video_id=video_id,
             language=result.get("language", "unknown"),
-            transcript=result.get("transcript", "")
+            transcript=result.get("transcript", ""),
+            segments=result.get("segments", [])
         )
     except ValueError as e:
         raise HTTPException(
@@ -96,6 +97,7 @@ async def translate_video_transcript(request: VideoTranslateRequest):
     try:
         translations = translate_transcript(
             transcript=request.transcript,
+            segments=[s.model_dump() for s in request.segments] if request.segments else [],
             source_language=request.source_language,
             target_languages=request.target_languages
         )

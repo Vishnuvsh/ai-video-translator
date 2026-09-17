@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional
+from typing import Optional, Any
 
 
 class VideoAnalyzeRequest(BaseModel):
@@ -32,14 +32,22 @@ class VideoTranscribeRequest(BaseModel):
     video_id: Optional[str] = None
 
 
+class TranscriptSegment(BaseModel):
+    start: float
+    end: float
+    text: str
+
+
 class VideoTranscribeResponse(BaseModel):
     success: bool
     video_id: str
     language: str
     transcript: str
+    segments: list[TranscriptSegment] = []
 
 class VideoTranslateRequest(BaseModel):
     transcript: str
+    segments: list[TranscriptSegment] = []
     source_language: str
     target_languages: list[str]
 
@@ -59,7 +67,7 @@ class VideoTranslateRequest(BaseModel):
 
 class VideoTranslateResponse(BaseModel):
     success: bool
-    translations: dict[str, str]
+    translations: dict[str, Any] # e.g. {"ml": {"text": "...", "segments": [...]}}
 
 class VideoTTSRequest(BaseModel):
     text: str
