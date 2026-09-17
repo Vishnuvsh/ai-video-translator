@@ -1,6 +1,5 @@
 import os
 import math
-from pydub import AudioSegment
 from openai import OpenAI
 
 def transcribe_audio(file_path: str) -> dict:
