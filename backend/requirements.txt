@@ -6,4 +6,3 @@ yt-dlp
 openai
 pydub
 python-dotenv
-pyaudioop
