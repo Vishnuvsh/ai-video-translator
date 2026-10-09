@@ -23,7 +23,7 @@ const VideoCard = ({ videoUrl, video, onReset, onTranscribe, transcribeState, tr
   };
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 max-w-2xl mx-auto mb-8 animate-fade-in-up group">
+    <div className="bg-white p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 w-full max-w-5xl mx-auto mb-12 animate-fade-in-up group">
       <div className="flex flex-col md:flex-row gap-6">
         <div className="md:w-1/2 flex-shrink-0 overflow-hidden rounded-lg">
           <img 
