@@ -6,8 +6,64 @@ from app.services.transcription_service import transcribe_audio
 from app.services.translation_service import translate_transcript
 from app.services.tts_service import generate_speech, get_audio_path
 import os
+import json
+import asyncio
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()
+
+# WebSocket Connection Manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, WebSocket] = {}
+
+    async def connect(self, websocket: WebSocket, client_id: str):
+        await websocket.accept()
+        self.active_connections[client_id] = websocket
+
+    def disconnect(self, client_id: str):
+        if client_id in self.active_connections:
+            del self.active_connections[client_id]
+
+    async def send_message(self, client_id: str, message: dict):
+        if client_id in self.active_connections:
+            try:
+                await self.active_connections[client_id].send_json(message)
+            except:
+                pass
+
+manager = ConnectionManager()
+
+@router.websocket("/ws/progress/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    await manager.connect(websocket, client_id)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(client_id)
+
+CACHE_DIR = ".cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+def get_cached_transcription(video_id: str):
+    cache_path = os.path.join(CACHE_DIR, f"{video_id}_transcription.json")
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return None
+    return None
+
+def set_cached_transcription(video_id: str, data: dict):
+    cache_path = os.path.join(CACHE_DIR, f"{video_id}_transcription.json")
+    try:
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except:
+        pass
 
 
 @router.post("/analyze", response_model=VideoAnalyzeResponse)
@@ -68,9 +124,40 @@ async def transcribe_video(request: VideoTranscribeRequest):
             detail="Must provide a valid video_id or YouTube url."
         )
 
+    # Setup Progress Callback
+    loop = asyncio.get_running_loop()
+    client_id = video_id
+    
+    def progress_callback(status: str, progress: float, message: str = ""):
+        asyncio.run_coroutine_threadsafe(
+            manager.send_message(client_id, {"status": status, "progress": progress, "message": message}),
+            loop
+        )
+
     try:
-        audio_path = download_audio(video_id)
-        result = transcribe_audio(audio_path)
+        # Check cache first
+        progress_callback("cache_check", 0, "Checking cache...")
+        cached_result = get_cached_transcription(video_id)
+        if cached_result:
+            progress_callback("completed", 100, "Loaded from cache successfully!")
+            return VideoTranscribeResponse(
+                success=True,
+                video_id=video_id,
+                language=cached_result.get("language", "unknown"),
+                transcript=cached_result.get("transcript", ""),
+                segments=cached_result.get("segments", [])
+            )
+
+        progress_callback("downloading", 0, "Starting audio download...")
+        audio_path = await run_in_threadpool(download_audio, video_id, progress_callback)
+        
+        progress_callback("transcribing", 0, "Starting transcription...")
+        result = await run_in_threadpool(transcribe_audio, audio_path, progress_callback)
+        
+        # Save to cache for future requests
+        set_cached_transcription(video_id, result)
+        
+        progress_callback("completed", 100, "Transcription completed successfully!")
         return VideoTranscribeResponse(
             success=True,
             video_id=video_id,
