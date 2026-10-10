@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { Analytics } from '@vercel/analytics/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import api from './services/api';
 import './index.css';
-import VideoCard from './components/VideoCard';
-import About from './components/About';
+
+const VideoCard = lazy(() => import('./components/VideoCard'));
+const About = lazy(() => import('./components/About'));
 
 function App() {
   const [currentView, setCurrentView] = useState('home');
@@ -14,6 +16,7 @@ function App() {
   const [error, setError] = useState('');
   const [transcribeState, setTranscribeState] = useState('idle');
   const [transcriptData, setTranscriptData] = useState(null);
+  const [progressData, setProgressData] = useState({ status: '', progress: 0, message: '' });
 
   const handleAnalyze = async () => {
     if (!videoUrl) return;
@@ -36,6 +39,20 @@ function App() {
     if (!videoData?.video_id) return;
     setTranscribeState('transcribing');
     setError('');
+    setProgressData({ status: 'connecting', progress: 0, message: 'Connecting to server...' });
+    
+    // Setup WebSocket for progress
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+    const wsBaseUrl = baseUrl.replace(/^http/, 'ws');
+    const ws = new WebSocket(`${wsBaseUrl}/ws/progress/${videoData.video_id}`);
+    
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setProgressData(data);
+      } catch (e) {}
+    };
+
     try {
       const response = await api.post('/api/video/transcribe', { video_id: videoData.video_id });
       if (response.data.success) {
@@ -45,6 +62,8 @@ function App() {
     } catch (err) {
       setError(err.response?.data?.detail || 'Transcription failed. Please try again.');
       setTranscribeState('idle');
+    } finally {
+      ws.close();
     }
   };
 
@@ -73,32 +92,32 @@ function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] flex flex-col font-sans selection:bg-amber-100 selection:text-amber-900">
+    <div className="min-h-screen bg-[#F5F5F7] flex flex-col font-sans selection:bg-[#0071E3]/20 selection:text-[#1D1D1F]">
       {/* Header */}
-      <header className="bg-transparent sticky top-0 z-40 py-4 backdrop-blur-md">
+      <header className="bg-white/70 sticky top-0 z-40 py-3 backdrop-blur-xl border-b border-gray-200/30 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
             {/* Logo */}
             <div className="flex-shrink-0 flex items-center">
-              <div className="bg-gradient-to-br from-amber-500 to-orange-500 p-1.5 rounded-lg mr-2 shadow-sm">
+              <div className="bg-[#0071E3] p-1.5 rounded-lg mr-2 shadow-sm">
                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
               </div>
-              <span className="font-extrabold text-xl text-gray-900 tracking-tight">
-                AI Video Translator
+              <span className="font-semibold text-xl text-[#1D1D1F] tracking-tight">
+                VideoTranslator
               </span>
             </div>
             
             {/* Nav Toggle Pill */}
-            <nav className="hidden sm:flex bg-white/60 backdrop-blur-md p-1 rounded-full shadow-sm border border-gray-200/50">
+            <nav className="hidden sm:flex bg-gray-100/80 backdrop-blur-md p-1 rounded-full border border-gray-200/50">
               <button 
                 onClick={() => setCurrentView('home')} 
-                className={`${currentView === 'home' ? 'bg-amber-500 text-white shadow-md' : 'text-gray-600 hover:text-gray-900'} px-6 py-1.5 rounded-full text-sm font-semibold transition-all duration-300`}
+                className={`${currentView === 'home' ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-gray-500 hover:text-[#1D1D1F]'} px-5 py-1 rounded-full text-sm font-medium transition-all duration-300`}
               >
                 Home
               </button>
               <button 
                 onClick={() => setCurrentView('about')} 
-                className={`${currentView === 'about' ? 'bg-amber-500 text-white shadow-md' : 'text-gray-600 hover:text-gray-900'} px-6 py-1.5 rounded-full text-sm font-semibold transition-all duration-300 ml-1`}
+                className={`${currentView === 'about' ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-gray-500 hover:text-[#1D1D1F]'} px-5 py-1 rounded-full text-sm font-medium transition-all duration-300 ml-1`}
               >
                 About
               </button>
@@ -106,8 +125,8 @@ function App() {
 
             {/* Right Profile / Action icon placeholder */}
             <div className="flex items-center">
-               <button className="p-2 bg-white rounded-full text-gray-500 hover:bg-gray-50 transition-colors shadow-sm border border-gray-200/50">
-                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+               <button className="p-2 bg-gray-100/80 rounded-full text-gray-500 hover:bg-gray-200/80 transition-colors border border-gray-200/50">
+                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                </button>
             </div>
           </div>
@@ -117,100 +136,156 @@ function App() {
       {/* Main Content */}
       <main className="flex-grow flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
         
-        {/* Animated Background Blobs */}
-        <div className="absolute top-0 left-1/4 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-[80px] opacity-40 animate-blob pointer-events-none"></div>
-        <div className="absolute top-40 right-1/4 w-72 h-72 bg-amber-300 rounded-full mix-blend-multiply filter blur-[80px] opacity-40 animate-blob animation-delay-2000 pointer-events-none"></div>
-        <div className="absolute -bottom-8 left-1/3 w-72 h-72 bg-orange-300 rounded-full mix-blend-multiply filter blur-[80px] opacity-40 animate-blob animation-delay-4000 pointer-events-none"></div>
-        {currentView === 'about' ? (
-          <About />
-        ) : (
-          <div className="max-w-5xl w-full mx-auto pt-8 md:pt-16">
-            
-            {/* Top Badge */}
-            <div className="animate-fade-in-up mb-8" style={{ animationDelay: '0.05s' }}>
-              <div className="inline-flex items-center justify-center space-x-2 bg-white/80 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-sm border border-gray-100 cursor-default animate-float">
-                 <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path></svg>
-                 <span className="text-xs sm:text-sm font-semibold text-gray-600">Next-Gen AI Video Translation Pipeline</span>
-              </div>
-            </div>
+        {/* Subtle macOS-style blurred background hints */}
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-200/40 rounded-full mix-blend-multiply filter blur-[100px] pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-200/40 rounded-full mix-blend-multiply filter blur-[100px] pointer-events-none"></div>
+        <AnimatePresence mode="wait">
+          {currentView === 'about' ? (
+            <motion.div 
+              key="about"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="w-full"
+            >
+              <Suspense fallback={<div className="p-12 text-center text-[#86868B] animate-pulse">Loading About...</div>}>
+                <About />
+              </Suspense>
+            </motion.div>
+          ) : (
+            <motion.div 
+              key="home"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="max-w-5xl w-full mx-auto pt-8 md:pt-16"
+            >
+              
+              {/* Top Badge */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                className="mb-6"
+              >
+                <div className="inline-flex items-center justify-center space-x-2 bg-gray-200/50 backdrop-blur-md px-4 py-1.5 rounded-full border border-gray-300/50 cursor-default">
+                   <svg className="w-3.5 h-3.5 text-[#0071E3]" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path></svg>
+                   <span className="text-xs font-medium text-[#1D1D1F]">AI Translation Pipeline</span>
+                </div>
+              </motion.div>
 
-            <h1 className="text-4xl md:text-6xl font-extrabold text-gray-900 tracking-tight mb-6 animate-fade-in-up relative z-10" style={{ animationDelay: '0.1s' }}>
-              Translate Videos Into <br className="hidden sm:block" />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 via-orange-500 to-purple-600 animate-gradient">Any Language</span>
-            </h1>
-            <p className="text-lg sm:text-xl text-gray-500 mb-12 max-w-2xl mx-auto font-medium animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-              Convert spoken content from videos into text and make it available in the language you understand.
-            </p>
-            
-            {!videoData && (
-              <div className="mb-12 max-w-3xl mx-auto animate-fade-in-up relative z-20" style={{ animationDelay: '0.3s' }}>
-                <div className="bg-white/90 backdrop-blur-md p-2 rounded-full shadow-[0_8px_30px_rgb(245,158,11,0.15)] border border-amber-100/50 flex flex-col sm:flex-row items-center focus-within:ring-4 focus-within:ring-amber-200 focus-within:border-amber-400 transition-all duration-300 relative hover:shadow-[0_8px_30px_rgb(245,158,11,0.3)] group">
-                  <div className="flex-grow flex items-center w-full px-4 py-2 sm:py-0">
-                    <svg className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
-                    <input 
-                      type="text" 
-                      placeholder="https://www.youtube.com/watch?v=..." 
-                      className="w-full bg-transparent outline-none text-gray-700 placeholder-gray-400 font-medium disabled:opacity-50"
-                      value={videoUrl}
-                      onChange={(e) => setVideoUrl(e.target.value)}
-                      disabled={isLoading}
-                    />
+              <motion.h1 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="text-4xl md:text-6xl font-semibold text-[#1D1D1F] tracking-tight mb-5 relative z-10"
+              >
+                Translate Videos Into <br className="hidden sm:block" />
+                <span className="text-[#0071E3]">Any Language.</span>
+              </motion.h1>
+              <motion.p 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="text-lg sm:text-xl text-[#86868B] mb-12 max-w-2xl mx-auto font-normal"
+              >
+                Convert spoken content from videos into text and make it available in the language you understand.
+              </motion.p>
+              
+              {!videoData && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.4 }}
+                  className="mb-12 max-w-3xl mx-auto relative z-20"
+                >
+                  <div className="bg-white/80 backdrop-blur-2xl p-1.5 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-gray-200 flex flex-col sm:flex-row items-center focus-within:ring-4 focus-within:ring-[#0071E3]/20 focus-within:border-[#0071E3]/50 transition-all duration-300 relative">
+                    <div className="flex-grow flex items-center w-full px-4 py-2 sm:py-0">
+                      <svg className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                      <input 
+                        type="text" 
+                        placeholder="Paste YouTube URL..." 
+                        className="w-full bg-transparent outline-none text-[#1D1D1F] placeholder-gray-400 font-medium disabled:opacity-50 text-base"
+                        value={videoUrl}
+                        onChange={(e) => setVideoUrl(e.target.value)}
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <button 
+                      onClick={handleAnalyze}
+                      disabled={isLoading || !videoUrl}
+                      className="w-full sm:w-auto bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium py-3 px-8 rounded-full transition-all duration-300 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[160px] mt-2 sm:mt-0 shadow-sm"
+                    >
+                      {isLoading ? (
+                        <span className="flex items-center space-x-2">
+                          <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" style={{ animationDuration: '0.5s' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span className="animate-pulse">Analyzing...</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center">
+                          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
+                          Analyze Video
+                        </span>
+                      )}
+                    </button>
                   </div>
-                  <div className="hidden sm:block w-px h-8 bg-gray-200 mx-2"></div>
-                  <button 
-                    onClick={handleAnalyze}
-                    disabled={isLoading || !videoUrl}
-                    className="w-full sm:w-auto bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-3.5 px-8 rounded-full shadow-lg shadow-orange-500/30 hover-lift transition-all duration-300 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[180px] mt-2 sm:mt-0"
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center space-x-2">
-                        <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" style={{ animationDuration: '0.5s' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span className="animate-pulse">Analyzing...</span>
-                      </span>
-                    ) : (
-                      <span className="flex items-center">
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
-                        Analyze Video
-                      </span>
-                    )}
-                  </button>
-                </div>
-                {error && <p className="text-red-500 text-sm mt-4 font-medium relative z-10">{error}</p>}
-                
-                {/* Supported Formats Chips */}
-                <div className="flex flex-wrap justify-center items-center gap-4 mt-8 relative z-0">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Supported Formats:</span>
-                  <div className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-gray-100 shadow-sm opacity-90 hover:opacity-100 transition-opacity animate-float" style={{ animationDelay: '0s' }}>
-                    <div className="w-4 h-4 rounded-full bg-red-100 flex items-center justify-center text-red-600 text-[10px]">▶</div>
-                    <span className="text-xs font-semibold text-gray-600">YouTube</span>
+                  {error && <p className="text-red-500 text-sm mt-4 font-medium relative z-10">{error}</p>}
+                  
+                  {/* Supported Formats Chips */}
+                  <div className="flex flex-wrap justify-center items-center gap-3 mt-8 relative z-0">
+                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Supported:</span>
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.5 }}
+                      className="flex items-center space-x-1.5 bg-gray-100 px-3 py-1 rounded-full border border-gray-200"
+                    >
+                      <div className="w-3 h-3 rounded-full bg-red-500 flex items-center justify-center text-white text-[8px]">▶</div>
+                      <span className="text-xs font-medium text-[#1D1D1F]">YouTube</span>
+                    </motion.div>
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.6 }}
+                      className="flex items-center space-x-1.5 bg-gray-100 px-3 py-1 rounded-full border border-gray-200"
+                    >
+                      <div className="w-3 h-3 rounded-full bg-blue-500 flex items-center justify-center text-white text-[8px]">♫</div>
+                      <span className="text-xs font-medium text-[#1D1D1F]">MP4 Files</span>
+                    </motion.div>
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.7 }}
+                      className="flex items-center space-x-1.5 bg-gray-100 px-3 py-1 rounded-full border border-gray-200"
+                    >
+                      <div className="w-3 h-3 rounded-full bg-[#1AB7EA] flex items-center justify-center text-white text-[8px]">v</div>
+                      <span className="text-xs font-medium text-[#1D1D1F]">Vimeo Links</span>
+                    </motion.div>
                   </div>
-                  <div className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-gray-100 shadow-sm opacity-90 hover:opacity-100 transition-opacity animate-float animation-delay-2000">
-                    <div className="w-4 h-4 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-[10px]">♫</div>
-                    <span className="text-xs font-semibold text-gray-600">MP4 Files</span>
-                  </div>
-                  <div className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-gray-100 shadow-sm opacity-90 hover:opacity-100 transition-opacity animate-float animation-delay-4000">
-                    <div className="w-4 h-4 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-[10px]">v</div>
-                    <span className="text-xs font-semibold text-gray-600">Vimeo Links</span>
-                  </div>
-                </div>
-              </div>
-            )}
+                </motion.div>
+              )}
 
             {videoData && (
-              <VideoCard 
-                videoUrl={videoUrl}
-                video={videoData} 
-                onReset={resetState} 
-                onTranscribe={handleTranscribe}
-                transcribeState={transcribeState}
-                transcriptData={transcriptData}
-              />
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+              >
+                <Suspense fallback={<div className="p-12 text-center text-[#86868B] animate-pulse">Loading Video Information...</div>}>
+                  <VideoCard 
+                    videoUrl={videoUrl}
+                    video={videoData} 
+                    onReset={resetState} 
+                    onTranscribe={handleTranscribe}
+                    transcribeState={transcribeState}
+                    transcriptData={transcriptData}
+                    progressData={progressData}
+                  />
+                </Suspense>
+              </motion.div>
             )}
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
           
       </main>
 
