@@ -1,6 +1,7 @@
 import os
 import re
 import tempfile
+import shutil
 from typing import Optional
 import yt_dlp
 
@@ -82,6 +83,10 @@ def fetch_video_metadata(video_id: str) -> dict:
     # Best thumbnail: prefer hqdefault, fall back to whatever yt-dlp provides
     thumbnail = info.get("thumbnail") or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
 
+    # Format upload date from YYYYMMDD to YYYY-MM-DD
+    upload_date_raw = info.get("upload_date")
+    upload_date_formatted = f"{upload_date_raw[:4]}-{upload_date_raw[4:6]}-{upload_date_raw[6:8]}" if upload_date_raw and len(upload_date_raw) == 8 else upload_date_raw
+
     return {
         "video_id": video_id,
         "title": info.get("title", "Unknown Title"),
@@ -89,10 +94,14 @@ def fetch_video_metadata(video_id: str) -> dict:
         "duration": duration_seconds,
         "duration_formatted": _format_duration(duration_seconds),
         "channel": info.get("uploader") or info.get("channel"),
+        "view_count": info.get("view_count"),
+        "like_count": info.get("like_count"),
+        "upload_date": upload_date_formatted,
+        "description": info.get("description"),
     }
 
 
-def download_audio(video_id: str) -> str:
+def download_audio(video_id: str, progress_callback=None) -> str:
     """
     Download the audio for a YouTube video to a temporary file.
     Returns the absolute path to the downloaded audio file.
@@ -117,6 +126,27 @@ def download_audio(video_id: str) -> str:
             'preferredquality': '128',
         }],
     }
+    
+    # Use aria2c for faster downloading if available on the system
+    if shutil.which("aria2c"):
+        ydl_opts['external_downloader'] = 'aria2c'
+        ydl_opts['external_downloader_args'] = ['-x', '16', '-k', '1M']
+        
+    def yt_progress_hook(d):
+        if progress_callback:
+            if d['status'] == 'downloading':
+                pct_str = d.get('_percent_str', '0%').strip().replace('%', '')
+                import re
+                pct_str = re.sub(r'\x1b[^m]*m', '', pct_str)
+                try:
+                    pct = float(pct_str)
+                except ValueError:
+                    pct = 0.0
+                progress_callback('downloading', pct, f'Downloading audio... {pct:.1f}%')
+            elif d['status'] == 'finished':
+                progress_callback('downloading', 100.0, 'Download complete. Extracting audio...')
+
+    ydl_opts['progress_hooks'] = [yt_progress_hook]
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
