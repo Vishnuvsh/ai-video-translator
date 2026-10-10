@@ -2,7 +2,7 @@ import os
 import math
 from openai import OpenAI
 
-def transcribe_audio(file_path: str) -> dict:
+def transcribe_audio(file_path: str, progress_callback=None) -> dict:
     """
     Validates file size and chunks the audio if it exceeds 25MB using pydub.
     Calls OpenAI's audio.transcriptions.create API.
@@ -46,6 +46,8 @@ def transcribe_audio(file_path: str) -> dict:
         all_segments = []
 
         if file_size <= MAX_SIZE_BYTES:
+            if progress_callback:
+                progress_callback('transcribing', 10.0, 'Transcribing audio with Whisper AI...')
             # Process directly
             with open(file_path, "rb") as audio_file:
                 transcription = client.audio.transcriptions.create(
@@ -96,6 +98,9 @@ def transcribe_audio(file_path: str) -> dict:
                         
                     chunk_files.append(chunk_path)
                     
+                    if progress_callback:
+                        progress_callback('transcribing', ((i + 1) / num_chunks) * 100, f'Transcribing part {i+1} of {num_chunks}...')
+                        
                     with open(chunk_path, "rb") as chunk_file:
                         transcription = client.audio.transcriptions.create(
                             model="whisper-large-v3",
