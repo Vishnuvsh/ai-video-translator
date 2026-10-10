@@ -20,6 +20,10 @@ class VideoMetadata(BaseModel):
     duration: Optional[int] = None
     duration_formatted: Optional[str] = None
     channel: Optional[str] = None
+    view_count: Optional[int] = None
+    like_count: Optional[int] = None
+    upload_date: Optional[str] = None
+    description: Optional[str] = None
 
 
 class VideoAnalyzeResponse(BaseModel):
