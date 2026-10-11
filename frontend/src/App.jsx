@@ -35,7 +35,7 @@ function App() {
     }
   };
 
-  const handleTranscribe = async () => {
+  const handleTranscribe = async (forceRefresh = false) => {
     if (!videoData?.video_id) return;
     setTranscribeState('transcribing');
     setError('');
@@ -50,11 +50,18 @@ function App() {
       try {
         const data = JSON.parse(event.data);
         setProgressData(data);
+        if (data.status === 'error') {
+          setError(data.message || 'Transcription failed.');
+          setTranscribeState('idle');
+        }
       } catch (e) {}
     };
 
     try {
-      const response = await api.post('/api/video/transcribe', { video_id: videoData.video_id });
+      const response = await api.post('/api/video/transcribe', { 
+        video_id: videoData.video_id,
+        force_refresh: forceRefresh
+      });
       if (response.data.success) {
         setTranscriptData(response.data);
         setTranscribeState('done');

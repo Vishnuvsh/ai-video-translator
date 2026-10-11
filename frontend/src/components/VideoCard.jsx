@@ -11,13 +11,39 @@ const VideoCard = ({ videoUrl, video, onReset, onTranscribe, transcribeState, tr
     }
   };
 
+  const formatSrtTime = (seconds) => {
+    const totalSecs = Math.floor(seconds || 0);
+    const millis = Math.floor(((seconds || 0) - totalSecs) * 1000);
+    const secs = totalSecs % 60;
+    const mins = Math.floor(totalSecs / 60) % 60;
+    const hours = Math.floor(totalSecs / 3600);
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
+  };
+
   const downloadTranscript = () => {
     if (transcriptData?.transcript) {
-      const blob = new Blob([transcriptData.transcript], { type: 'text/plain' });
+      const blob = new Blob([transcriptData.transcript], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'transcript.txt';
+      const safeTitle = (video.title || 'transcript').slice(0, 30).replace(/[^a-zA-Z0-9_-]/g, '_');
+      a.download = `${safeTitle}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const downloadSrt = () => {
+    if (transcriptData?.segments?.length) {
+      const srtContent = transcriptData.segments
+        .map((seg, idx) => `${idx + 1}\n${formatSrtTime(seg.start)} --> ${formatSrtTime(seg.end)}\n${seg.text.trim()}\n`)
+        .join('\n');
+      const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeTitle = (video.title || 'subtitles').slice(0, 30).replace(/[^a-zA-Z0-9_-]/g, '_');
+      a.download = `${safeTitle}.srt`;
       a.click();
       URL.revokeObjectURL(url);
     }
@@ -99,7 +125,7 @@ const VideoCard = ({ videoUrl, video, onReset, onTranscribe, transcribeState, tr
 
       <div className="mt-6 flex flex-col sm:flex-row gap-3 w-full border-t pt-6 border-gray-200/50">
         <button 
-          onClick={onTranscribe}
+          onClick={() => onTranscribe(false)}
           disabled={isTranscribing || transcribeState === 'done'}
           className="flex-1 bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium py-3 px-4 rounded-2xl shadow-sm transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[160px]"
         >
@@ -111,8 +137,18 @@ const VideoCard = ({ videoUrl, video, onReset, onTranscribe, transcribeState, tr
               </svg>
               <span className="animate-pulse">{progressData?.status === 'downloading' ? 'Downloading...' : 'Processing...'}</span>
             </span>
-          ) : transcribeState === 'done' ? 'Transcription Complete' : 'Transcribe Video'}
+          ) : transcribeState === 'done' ? '✓ Transcription Complete' : 'Transcribe Video'}
         </button>
+        {transcribeState === 'done' && (
+          <button 
+            onClick={() => onTranscribe(true)}
+            disabled={isTranscribing}
+            title="Force fresh transcription without loading from cache"
+            className="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-medium py-3 px-4 rounded-2xl transition-all duration-300 flex items-center justify-center space-x-1.5"
+          >
+            <span>↻ Re-transcribe (Fresh)</span>
+          </button>
+        )}
         <button 
           onClick={onReset}
           className="flex-1 bg-gray-100/80 hover:bg-gray-200 text-gray-800 font-medium py-3 px-4 rounded-2xl transition-all duration-300 border border-gray-200/50"
@@ -130,19 +166,27 @@ const VideoCard = ({ videoUrl, video, onReset, onTranscribe, transcribeState, tr
           <div className="bg-gray-100/50 p-5 rounded-2xl border border-gray-200/50 max-h-60 overflow-y-auto mb-4 whitespace-pre-wrap text-sm text-[#1D1D1F] font-sans leading-relaxed">
             {transcriptData.transcript}
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-wrap gap-3">
             <button 
               onClick={copyToClipboard}
-              className="text-sm w-full sm:w-auto bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2.5 px-6 rounded-full shadow-sm transition-all duration-300 text-center"
+              className="text-sm bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2.5 px-6 rounded-full shadow-sm transition-all duration-300 text-center"
             >
               Copy Transcript
             </button>
             <button 
               onClick={downloadTranscript}
-              className="text-sm w-full sm:w-auto bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2.5 px-6 rounded-full shadow-sm transition-all duration-300 text-center"
+              className="text-sm bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2.5 px-6 rounded-full shadow-sm transition-all duration-300 text-center"
             >
-              Download Transcript
+              Download Text (.txt)
             </button>
+            {transcriptData?.segments?.length > 0 && (
+              <button 
+                onClick={downloadSrt}
+                className="text-sm bg-blue-50 border border-blue-200 hover:bg-blue-100 text-[#0071E3] font-medium py-2.5 px-6 rounded-full shadow-sm transition-all duration-300 text-center flex items-center space-x-1.5"
+              >
+                <span>Download Subtitles (.srt)</span>
+              </button>
+            )}
           </div>
         </div>
       )}

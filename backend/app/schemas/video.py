@@ -34,6 +34,7 @@ class VideoAnalyzeResponse(BaseModel):
 class VideoTranscribeRequest(BaseModel):
     url: Optional[str] = None
     video_id: Optional[str] = None
+    force_refresh: Optional[bool] = False
 
 
 class TranscriptSegment(BaseModel):
