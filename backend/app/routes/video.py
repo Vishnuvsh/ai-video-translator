@@ -124,7 +124,7 @@ async def analyze_video(request: VideoAnalyzeRequest):
     except ValueError as e:
         raise HTTPException(
             status_code=404,
-            detail="Unable to access this video. It may be private, unavailable, or restricted."
+            detail=str(e) if str(e) else "Unable to access this video. It may be private, unavailable, or restricted."
         )
     except RuntimeError:
         raise HTTPException(

@@ -1,7 +1,10 @@
 import os
 import re
+import json
 import tempfile
 import shutil
+import urllib.request
+import urllib.error
 from typing import Optional
 import yt_dlp
 
@@ -49,9 +52,44 @@ def _format_duration(seconds: Optional[int]) -> Optional[str]:
     return f"{minutes:02d}:{secs:02d}"
 
 
+def fetch_oembed_metadata(video_id: str) -> Optional[dict]:
+    """
+    Fetch metadata via YouTube's official public oEmbed API.
+    Never blocked by YouTube's cloud datacenter IP bot detection.
+    """
+    try:
+        oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+        req = urllib.request.Request(
+            oembed_url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode("utf-8"))
+                return {
+                    "video_id": video_id,
+                    "title": data.get("title", "YouTube Video"),
+                    "thumbnail": data.get("thumbnail_url") or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
+                    "duration": None,
+                    "duration_formatted": None,
+                    "channel": data.get("author_name"),
+                    "view_count": None,
+                    "like_count": None,
+                    "upload_date": None,
+                    "description": None,
+                }
+    except Exception:
+        pass
+    return None
+
+
 def fetch_video_metadata(video_id: str) -> dict:
     """
-    Fetch public metadata for a YouTube video using yt-dlp in metadata-only mode.
+    Fetch public metadata for a YouTube video using yt-dlp in metadata-only mode,
+    falling back to YouTube's oEmbed API if cloud IP bot blocking occurs.
     Raises:
         ValueError: if the video is unavailable/private.
         RuntimeError: for unexpected errors.
@@ -65,18 +103,31 @@ def fetch_video_metadata(video_id: str) -> dict:
         "no_warnings": True,
         # Avoid writing any files
         "noplaylist": True,
+        # Use mobile clients to avoid datacenter bot detection
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "mweb", "web"]
+            }
+        },
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-    except yt_dlp.utils.DownloadError as e:
+    except Exception as e:
+        # Fallback to YouTube oEmbed API (safe on cloud datacenter IPs like Render)
+        oembed_data = fetch_oembed_metadata(video_id)
+        if oembed_data:
+            return oembed_data
+
         error_msg = str(e).lower()
         if any(word in error_msg for word in ["private", "unavailable", "removed", "does not exist", "not available"]):
             raise ValueError("Video is unavailable, private, or has been removed.")
         raise ValueError(f"Unable to access this video: {str(e)}")
-    except Exception as e:
-        raise RuntimeError(f"Unexpected error while fetching metadata: {str(e)}")
 
     duration_seconds = info.get("duration")
 
@@ -120,6 +171,15 @@ def download_audio(video_id: str, progress_callback=None) -> str:
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'mweb', 'web']
+            }
+        },
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+        },
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
