@@ -141,7 +141,7 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-grow flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+      <main className="flex-grow flex flex-col items-center justify-center p-6 text-center relative overflow-x-clip">
         
         {/* Subtle macOS-style blurred background hints */}
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-200/40 rounded-full mix-blend-multiply filter blur-[100px] pointer-events-none"></div>
