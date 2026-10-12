@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import api from '../services/api';
 import { SUPPORTED_LANGUAGES, getLanguageName } from '../config/languages';
 import VideoPlayer from './VideoPlayer';
@@ -14,6 +14,47 @@ const TranslationSection = ({ transcriptData, videoUrl }) => {
   const [generatingVoices, setGeneratingVoices] = useState({});
   const [voiceErrors, setVoiceErrors] = useState({});
   const [activeSubtitleLang, setActiveSubtitleLang] = useState(null);
+
+  // Ref for scrolling to subtitle player
+  const subtitlePlayerRef = useRef(null);
+
+  const scrollToPlayer = () => {
+    if (!subtitlePlayerRef.current) return;
+    try {
+      const headerOffset = 85; // Height of sticky header + spacing
+      const rect = subtitlePlayerRef.current.getBoundingClientRect();
+      const currentScrollY = window.pageYOffset || document.documentElement.scrollTop;
+      const targetScrollY = currentScrollY + rect.top - headerOffset;
+
+      window.scrollTo({
+        top: Math.max(0, targetScrollY),
+        behavior: 'smooth'
+      });
+    } catch (e) {
+      subtitlePlayerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  useEffect(() => {
+    if (activeSubtitleLang) {
+      // Trigger smooth scroll once mounted and once more when layout finishes
+      const timer1 = setTimeout(scrollToPlayer, 80);
+      const timer2 = setTimeout(scrollToPlayer, 300);
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
+    }
+  }, [activeSubtitleLang]);
+
+  const handlePlaySubtitles = (langCode) => {
+    if (activeSubtitleLang === langCode) {
+      setActiveSubtitleLang(null);
+    } else {
+      setActiveSubtitleLang(langCode);
+      setTimeout(scrollToPlayer, 50);
+    }
+  };
 
   const sourceLanguage = transcriptData?.language || 'en';
 
@@ -161,14 +202,25 @@ const TranslationSection = ({ transcriptData, videoUrl }) => {
           
           {/* Subtitles Player */}
           {activeSubtitleLang && translations[activeSubtitleLang] && videoUrl && (
-             <div className="mb-6 animate-fade-in-up">
-               <div className="flex justify-between items-center mb-2">
-                 <h4 className="font-bold text-gray-900">
-                   Playing Subtitles: <span className="text-amber-600">{getLanguageName(activeSubtitleLang)}</span>
+             <div ref={subtitlePlayerRef} className="mb-6 animate-fade-in-up bg-white p-4 sm:p-5 rounded-2xl border-2 border-emerald-500/20 shadow-lg scroll-mt-24">
+               <div className="flex justify-between items-center mb-3">
+                 <h4 className="font-bold text-gray-900 flex items-center space-x-2">
+                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                   <span>Playing Subtitles: <span className="text-emerald-700">{getLanguageName(activeSubtitleLang)}</span></span>
                  </h4>
-                 <button onClick={() => setActiveSubtitleLang(null)} className="text-sm text-gray-500 hover:text-gray-700 transition">Close Player</button>
+                 <button 
+                   onClick={() => setActiveSubtitleLang(null)} 
+                   className="text-xs sm:text-sm text-gray-500 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-full transition"
+                 >
+                   ✕ Close Player
+                 </button>
                </div>
-               <VideoPlayer url={videoUrl} segments={translations[activeSubtitleLang]?.segments || []} />
+               <VideoPlayer 
+                 key={activeSubtitleLang}
+                 url={videoUrl} 
+                 segments={translations[activeSubtitleLang]?.segments || []} 
+                 autoPlay={true}
+               />
              </div>
           )}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-2 gap-3 sm:gap-0">
@@ -186,6 +238,7 @@ const TranslationSection = ({ transcriptData, videoUrl }) => {
             const segments = typeof transObj === 'string' ? [] : transObj?.segments || [];
             const isErrorText = textContent.startsWith('Error:');
             const langName = getLanguageName(langCode);
+            const isPlayingThis = activeSubtitleLang === langCode;
             return (
               <div key={langCode} className="bg-white border border-gray-200 rounded-lg shadow-sm p-5 animate-fade-in-up hover:shadow-md transition-shadow duration-300" style={{ animationDelay: `${index * 0.1}s` }}>
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3 md:gap-0">
@@ -195,13 +248,14 @@ const TranslationSection = ({ transcriptData, videoUrl }) => {
                   <div className="flex flex-wrap gap-2 w-full md:w-auto">
                     {!isErrorText && segments.length > 0 && videoUrl && (
                       <button
-                        onClick={() => {
-                          setActiveSubtitleLang(langCode);
-                          window.scrollTo({ top: document.querySelector('.mt-8.space-y-6').offsetTop - 50, behavior: 'smooth' });
-                        }}
-                        className="flex-1 md:flex-none text-center text-xs bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 font-medium py-1.5 px-3 rounded hover-lift transition-all duration-200"
+                        onClick={() => handlePlaySubtitles(langCode)}
+                        className={`flex-1 md:flex-none text-center text-xs font-medium py-1.5 px-3 rounded hover-lift transition-all duration-200 flex items-center justify-center space-x-1.5 ${
+                          isPlayingThis
+                            ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-400'
+                            : 'bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700'
+                        }`}
                       >
-                        Play Subtitles
+                        <span>{isPlayingThis ? '❚❚ Close Subtitles' : '▶ Play Subtitles'}</span>
                       </button>
                     )}
                     <button
