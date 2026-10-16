@@ -374,3 +374,62 @@ async def get_audio_file(filename: str):
         raise HTTPException(status_code=404, detail="Audio file not found.")
         
     return FileResponse(file_path, media_type="audio/mpeg", filename=filename)
+
+
+@router.get("/debug-captions/{video_id}")
+async def debug_captions(video_id: str):
+    import urllib.request
+    import json
+    logs = []
+    try:
+        player_url = "https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
+        payload = json.dumps({
+            "videoId": video_id,
+            "context": {"client": {"clientName": "ANDROID", "clientVersion": "20.10.38"}}
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            player_url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
+            }
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            status = data.get("playabilityStatus", {}).get("status")
+            captions_data = data.get("captions", {}).get("playerCaptionsTracklistRenderer", {})
+            tracks = captions_data.get("captionTracks", [])
+            logs.append(f"InnerTube status: {status}, tracks: {len(tracks)}")
+            if tracks:
+                first_url = tracks[0].get("baseUrl")
+                logs.append(f"First track: lang={tracks[0].get('languageCode')}, kind={tracks[0].get('kind')}")
+                sub_req = urllib.request.Request(
+                    raw_url,
+                    headers={
+                        "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
+                        "Accept-Language": "en-US,en;q=0.9",
+                    }
+                )
+                try:
+                    with urllib.request.urlopen(sub_req, timeout=8) as s_resp:
+                        content = s_resp.read().decode("utf-8")
+                        logs.append(f"Timedtext XML length: {len(content)}")
+                        from app.services.youtube_service import _parse_timedtext_xml
+                        segs = _parse_timedtext_xml(content)
+                        logs.append(f"Parsed segments: {len(segs)}")
+                except Exception as te:
+                    logs.append(f"Timedtext error: {type(te).__name__}: {str(te)}")
+    except Exception as e:
+        logs.append(f"InnerTube error: {type(e).__name__}: {str(e)}")
+
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+        api = YouTubeTranscriptApi()
+        res = api.fetch(video_id)
+        logs.append(f"youtube_transcript_api: {len(res.to_raw_data())} items")
+    except Exception as e:
+        logs.append(f"youtube_transcript_api error: {type(e).__name__}: {str(e)}")
+
+    return {"video_id": video_id, "logs": logs}
+
