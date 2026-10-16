@@ -70,7 +70,13 @@ def get_cookie_file() -> Optional[str]:
     ]
     for path in candidates:
         if path and os.path.isfile(path) and os.path.getsize(path) > 0:
-            return os.path.abspath(path)
+            try:
+                # Copy to writable temp directory because yt-dlp attempts to write/update cookies
+                temp_cookie_path = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
+                shutil.copyfile(path, temp_cookie_path)
+                return temp_cookie_path
+            except Exception:
+                return os.path.abspath(path)
 
     raw_content = os.getenv("YOUTUBE_COOKIES") or os.getenv("YOUTUBE_COOKIES_CONTENT")
     if raw_content:
