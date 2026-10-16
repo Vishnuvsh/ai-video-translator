@@ -423,13 +423,34 @@ async def debug_captions(video_id: str):
     except Exception as e:
         logs.append(f"InnerTube error: {type(e).__name__}: {str(e)}")
 
+    from app.services.youtube_service import get_cookie_file, fetch_youtube_captions
+    cookie_path = get_cookie_file()
+    logs.append(f"Cookie file detected: {cookie_path} (exists={bool(cookie_path)})")
+
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
-        api = YouTubeTranscriptApi()
+        import requests
+        session = requests.Session()
+        if cookie_path:
+            import http.cookiejar
+            try:
+                jar = http.cookiejar.MozillaCookieJar(cookie_path)
+                jar.load(ignore_discard=True, ignore_expires=True)
+                session.cookies = jar
+                logs.append(f"Loaded {len(jar)} cookies into session")
+            except Exception as ce:
+                logs.append(f"Cookie load error: {ce}")
+        api = YouTubeTranscriptApi(http_client=session)
         res = api.fetch(video_id)
         logs.append(f"youtube_transcript_api: {len(res.to_raw_data())} items")
     except Exception as e:
         logs.append(f"youtube_transcript_api error: {type(e).__name__}: {str(e)}")
+
+    try:
+        cap = fetch_youtube_captions(video_id)
+        logs.append(f"fetch_youtube_captions result: {bool(cap)} (segments={len(cap.get('segments', [])) if cap else 0})")
+    except Exception as e:
+        logs.append(f"fetch_youtube_captions error: {type(e).__name__}: {str(e)}")
 
     return {"video_id": video_id, "logs": logs}
 
