@@ -452,5 +452,20 @@ async def debug_captions(video_id: str):
     except Exception as e:
         logs.append(f"fetch_youtube_captions error: {type(e).__name__}: {str(e)}")
 
+    try:
+        import yt_dlp
+        ydl_opts = {
+            'skip_download': True,
+            'quiet': True,
+            'no_warnings': True,
+        }
+        if cookie_path:
+            ydl_opts['cookiefile'] = cookie_path
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            logs.append(f"yt_dlp success: title='{info.get('title')}', formats={len(info.get('formats', []))}")
+    except Exception as ye:
+        logs.append(f"yt_dlp error: {type(ye).__name__}: {str(ye)}")
+
     return {"video_id": video_id, "logs": logs}
 
