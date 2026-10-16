@@ -207,48 +207,201 @@ def fetch_video_metadata(video_id: str) -> dict:
     return result
 
 
+def _parse_timedtext_xml(xml_content: str) -> list[dict]:
+    """Parse timedtext XML (supports format 3 <p> and format 1 <text>)."""
+    import xml.etree.ElementTree as ET
+    import html as html_module
+
+    root = ET.fromstring(xml_content)
+    segments = []
+
+    p_nodes = root.findall(".//p")
+    if p_nodes:
+        for p in p_nodes:
+            t_ms = p.attrib.get("t")
+            d_ms = p.attrib.get("d", "0")
+            if t_ms is None:
+                continue
+            start_sec = round(int(t_ms) / 1000.0, 2)
+            dur_sec = round(int(d_ms) / 1000.0, 2)
+            end_sec = round(start_sec + dur_sec, 2)
+
+            text_nodes = p.findall(".//s")
+            if text_nodes:
+                line_text = "".join(node.text or "" for node in text_nodes)
+            else:
+                line_text = "".join(p.itertext())
+
+            line_text = html_module.unescape(line_text).strip()
+            line_text = " ".join(line_text.split())
+            if line_text:
+                segments.append({
+                    "start": start_sec,
+                    "end": end_sec,
+                    "text": line_text
+                })
+    else:
+        for t in root.findall(".//text"):
+            start = float(t.attrib.get("start", 0.0))
+            dur = float(t.attrib.get("dur", 0.0))
+            line_text = html_module.unescape("".join(t.itertext())).strip()
+            line_text = " ".join(line_text.split())
+            if line_text:
+                segments.append({
+                    "start": round(start, 2),
+                    "end": round(start + dur, 2),
+                    "text": line_text
+                })
+
+    return segments
+
+
 def fetch_youtube_captions(video_id: str) -> Optional[dict]:
     """
-    Fetch native or auto-generated YouTube captions directly using timedtext.
-    Executes in <0.5s, avoids downloading audio, and completely bypasses cloud datacenter bot detection.
+    Fetch native or auto-generated YouTube captions directly.
+    Multi-layered strategy:
+    1. Direct Android InnerTube Player API + timedtext XML (bypasses cloud datacenter IP blocks, ~0.3s)
+    2. youtube_transcript_api modern .fetch()
+    3. youtube_transcript_api legacy .get_transcript()
     """
+    # Strategy 1: Direct InnerTube Android player API (never blocked on cloud/datacenter IPs)
+    try:
+        player_url = "https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
+        payload = json.dumps({
+            "videoId": video_id,
+            "context": {
+                "client": {
+                    "clientName": "ANDROID",
+                    "clientVersion": "20.10.38"
+                }
+            }
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            player_url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
+            }
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            captions_data = data.get("captions", {}).get("playerCaptionsTracklistRenderer", {})
+            tracks = captions_data.get("captionTracks", [])
+
+            if tracks:
+                # Select best track: manual English > auto English > any manual > first track
+                chosen_track = None
+                for t in tracks:
+                    lang = t.get("languageCode", "")
+                    kind = t.get("kind", "")
+                    if lang.startswith("en") and kind != "asr":
+                        chosen_track = t
+                        break
+                if not chosen_track:
+                    for t in tracks:
+                        if t.get("languageCode", "").startswith("en"):
+                            chosen_track = t
+                            break
+                if not chosen_track:
+                    for t in tracks:
+                        if t.get("kind") != "asr":
+                            chosen_track = t
+                            break
+                if not chosen_track:
+                    chosen_track = tracks[0]
+
+                raw_url = chosen_track.get("baseUrl")
+                if raw_url:
+                    sub_req = urllib.request.Request(
+                        raw_url,
+                        headers={
+                            "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
+                            "Accept-Language": "en-US,en;q=0.9",
+                        }
+                    )
+                    with urllib.request.urlopen(sub_req, timeout=8) as s_resp:
+                        xml_content = s_resp.read().decode("utf-8")
+                        segments = _parse_timedtext_xml(xml_content)
+                        if segments:
+                            full_text = " ".join(s["text"] for s in segments)
+                            lang_code = chosen_track.get("languageCode", "en")
+                            if "-" in lang_code:
+                                lang_code = lang_code.split("-")[0]
+                            return {
+                                "transcript": full_text,
+                                "language": lang_code,
+                                "segments": segments
+                            }
+    except Exception:
+        pass
+
+    # Strategy 2: youtube_transcript_api modern .fetch()
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         api = YouTubeTranscriptApi()
         res = api.fetch(video_id)
-        raw = res.to_raw_data()
-        if not raw:
-            return None
+        raw = res.to_raw_data() if hasattr(res, "to_raw_data") else None
+        if raw:
+            segments = []
+            full_text_parts = []
+            for s in raw:
+                text = s.get("text", "").strip()
+                if not text:
+                    continue
+                start = float(s.get("start", 0.0))
+                duration = float(s.get("duration", 0.0))
+                segments.append({
+                    "start": round(start, 2),
+                    "end": round(start + duration, 2),
+                    "text": text
+                })
+                full_text_parts.append(text)
 
-        segments = []
-        full_text_parts = []
-        for s in raw:
-            text = s.get("text", "").strip()
-            if not text:
-                continue
-            start = float(s.get("start", 0.0))
-            duration = float(s.get("duration", 0.0))
-            segments.append({
-                "start": round(start, 2),
-                "end": round(start + duration, 2),
-                "text": text
-            })
-            full_text_parts.append(text)
-
-        if not segments:
-            return None
-
-        lang_code = res.language_code or "en"
-        if "-" in lang_code:
-            lang_code = lang_code.split("-")[0]
-
-        return {
-            "transcript": " ".join(full_text_parts),
-            "language": lang_code,
-            "segments": segments
-        }
+            if segments:
+                lang_code = getattr(res, "language_code", "en") or "en"
+                if "-" in lang_code:
+                    lang_code = lang_code.split("-")[0]
+                return {
+                    "transcript": " ".join(full_text_parts),
+                    "language": lang_code,
+                    "segments": segments
+                }
     except Exception:
-        return None
+        pass
+
+    # Strategy 3: youtube_transcript_api legacy .get_transcript()
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+        if hasattr(YouTubeTranscriptApi, "get_transcript"):
+            raw = YouTubeTranscriptApi.get_transcript(video_id)
+            if raw:
+                segments = []
+                full_text_parts = []
+                for s in raw:
+                    text = s.get("text", "").strip()
+                    if not text:
+                        continue
+                    start = float(s.get("start", 0.0))
+                    duration = float(s.get("duration", 0.0))
+                    segments.append({
+                        "start": round(start, 2),
+                        "end": round(start + duration, 2),
+                        "text": text
+                    })
+                    full_text_parts.append(text)
+
+                if segments:
+                    return {
+                        "transcript": " ".join(full_text_parts),
+                        "language": "en",
+                        "segments": segments
+                    }
+    except Exception:
+        pass
+
+    return None
+
 
 
 def download_audio(video_id: str, progress_callback=None) -> str:

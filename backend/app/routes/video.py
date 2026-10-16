@@ -203,19 +203,18 @@ async def transcribe_video(request: VideoTranscribeRequest):
                 )
 
         # Strategy 1: Ultra-fast native/auto-generated YouTube transcript (<0.5s, no audio download, no cloud bot blocking)
-        if not request.force_refresh:
-            progress_callback("transcribing", 20, "Extracting video transcript...")
-            caption_data = await run_in_threadpool(fetch_youtube_captions, video_id)
-            if caption_data and caption_data.get("segments"):
-                set_cached_transcription(video_id, caption_data)
-                progress_callback("completed", 100, "Transcription completed successfully!")
-                return VideoTranscribeResponse(
-                    success=True,
-                    video_id=video_id,
-                    language=caption_data.get("language", "unknown"),
-                    transcript=caption_data.get("transcript", ""),
-                    segments=caption_data.get("segments", [])
-                )
+        progress_callback("transcribing", 20, "Extracting video transcript...")
+        caption_data = await run_in_threadpool(fetch_youtube_captions, video_id)
+        if caption_data and caption_data.get("segments"):
+            set_cached_transcription(video_id, caption_data)
+            progress_callback("completed", 100, "Transcription completed successfully!")
+            return VideoTranscribeResponse(
+                success=True,
+                video_id=video_id,
+                language=caption_data.get("language", "unknown"),
+                transcript=caption_data.get("transcript", ""),
+                segments=caption_data.get("segments", [])
+            )
 
         # Strategy 2: Fallback to audio download + Whisper AI speech recognition
         progress_callback("downloading", 0, "Starting audio download...")
