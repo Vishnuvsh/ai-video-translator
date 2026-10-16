@@ -192,7 +192,11 @@ const VideoCard = ({ videoUrl, video, onReset, onTranscribe, transcribeState, tr
       )}
 
       {transcriptData && (
-        <TranslationSection transcriptData={transcriptData} videoUrl={`https://www.youtube.com/watch?v=${video.video_id}`} />
+        <TranslationSection 
+          transcriptData={transcriptData} 
+          videoUrl={videoUrl || `https://www.youtube.com/watch?v=${video.video_id}`}
+          videoId={video.video_id}
+        />
       )}
     </motion.div>
   );
