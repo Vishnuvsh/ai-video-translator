@@ -94,6 +94,30 @@ def set_cached_transcription(video_id: str, data: dict):
     except:
         pass
 
+def get_cached_translations(video_id: str) -> dict:
+    if not video_id:
+        return {}
+    cache_path = os.path.join(CACHE_DIR, f"{video_id}_translations.json")
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def set_cached_translations(video_id: str, new_translations: dict):
+    if not video_id:
+        return
+    cache_path = os.path.join(CACHE_DIR, f"{video_id}_translations.json")
+    try:
+        data = get_cached_translations(video_id)
+        data.update(new_translations)
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except Exception:
+        pass
+
 
 @router.post("/analyze", response_model=VideoAnalyzeResponse)
 async def analyze_video(request: VideoAnalyzeRequest):
@@ -120,7 +144,7 @@ async def analyze_video(request: VideoAnalyzeRequest):
 
     # Step 3: Fetch metadata via youtube_service
     try:
-        metadata = fetch_video_metadata(video_id)
+        metadata = await run_in_threadpool(fetch_video_metadata, video_id)
     except ValueError as e:
         raise HTTPException(
             status_code=404,
@@ -237,27 +261,63 @@ async def export_srt_subtitles(video_id: str):
         headers={"Content-Disposition": f'attachment; filename="{video_id}.srt"'}
     )
 
+@router.get("/translations/{video_id}")
+async def get_video_translations(video_id: str):
+    """
+    Get all previously cached translations for a video so already translated
+    languages load immediately.
+    """
+    cached = get_cached_translations(video_id)
+    return {"success": True, "video_id": video_id, "translations": cached}
+
+
 @router.post("/translate", response_model=VideoTranslateResponse)
 async def translate_video_transcript(request: VideoTranslateRequest):
     """
     Translate the transcript into the selected target languages.
+    Uses cached translations if already available for instant response.
     """
-    try:
-        translations = translate_transcript(
-            transcript=request.transcript,
-            segments=[s.model_dump() for s in request.segments] if request.segments else [],
-            source_language=request.source_language,
-            target_languages=request.target_languages
+    video_id = request.video_id
+    cached_translations = get_cached_translations(video_id) if video_id else {}
+    
+    # Check which languages are already cached and which still need translating
+    needed_languages = [
+        lang for lang in request.target_languages 
+        if lang not in cached_translations or (
+            isinstance(cached_translations[lang], dict) and cached_translations[lang].get("text", "").startswith("Error:")
         )
-        return VideoTranslateResponse(
-            success=True,
-            translations=translations
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Translation failed: {str(e)}"
-        )
+    ]
+    
+    results = {lang: cached_translations[lang] for lang in request.target_languages if lang in cached_translations and lang not in needed_languages}
+    
+    if needed_languages:
+        try:
+            new_translations = await run_in_threadpool(
+                translate_transcript,
+                transcript=request.transcript,
+                segments=[s.model_dump() for s in request.segments] if request.segments else [],
+                source_language=request.source_language,
+                target_languages=needed_languages
+            )
+            results.update(new_translations)
+            if video_id:
+                # Cache successful translations
+                successful_to_cache = {
+                    k: v for k, v in new_translations.items()
+                    if not (isinstance(v, dict) and v.get("text", "").startswith("Error:"))
+                }
+                if successful_to_cache:
+                    set_cached_translations(video_id, successful_to_cache)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Translation failed: {str(e)}"
+            )
+            
+    return VideoTranslateResponse(
+        success=True,
+        translations=results
+    )
 
 @router.post("/tts", response_model=VideoTTSResponse)
 async def generate_video_tts(request: VideoTTSRequest):
@@ -280,9 +340,10 @@ async def generate_video_tts(request: VideoTTSRequest):
             audio_url=f"/api/video/audio/{filename}"
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Voice generation failed: {str(e)}"
+        return VideoTTSResponse(
+            success=False,
+            language=request.language,
+            message=str(e)
         )
 
 @router.get("/audio/{filename}")

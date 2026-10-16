@@ -51,6 +51,7 @@ class VideoTranscribeResponse(BaseModel):
     segments: list[TranscriptSegment] = []
 
 class VideoTranslateRequest(BaseModel):
+    video_id: Optional[str] = None
     transcript: str
     segments: list[TranscriptSegment] = []
     source_language: str
@@ -89,4 +90,5 @@ class VideoTTSRequest(BaseModel):
 class VideoTTSResponse(BaseModel):
     success: bool
     language: str
-    audio_url: str
+    audio_url: Optional[str] = None
+    message: Optional[str] = None
