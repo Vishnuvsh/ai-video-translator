@@ -405,7 +405,7 @@ async def debug_captions(video_id: str):
                 first_url = tracks[0].get("baseUrl")
                 logs.append(f"First track: lang={tracks[0].get('languageCode')}, kind={tracks[0].get('kind')}")
                 sub_req = urllib.request.Request(
-                    raw_url,
+                    first_url,
                     headers={
                         "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
                         "Accept-Language": "en-US,en;q=0.9",
