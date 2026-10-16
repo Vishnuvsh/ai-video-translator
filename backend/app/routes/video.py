@@ -458,6 +458,11 @@ async def debug_captions(video_id: str):
             'skip_download': True,
             'quiet': True,
             'no_warnings': True,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['web_safari', 'ios', 'mweb']
+                }
+            }
         }
         if cookie_path:
             ydl_opts['cookiefile'] = cookie_path
