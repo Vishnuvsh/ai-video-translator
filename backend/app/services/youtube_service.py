@@ -61,13 +61,13 @@ def fetch_innertube_metadata(video_id: str) -> Optional[dict]:
     Executes in ~0.2-0.3s (15x-20x faster than yt-dlp).
     """
     try:
-        url = "https://www.youtube.com/youtubei/v1/player"
+        url = "https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
         payload = json.dumps({
             "videoId": video_id,
             "context": {
                 "client": {
-                    "clientName": "WEB",
-                    "clientVersion": "2.20231201.00.00"
+                    "clientName": "ANDROID",
+                    "clientVersion": "20.10.38"
                 }
             }
         }).encode("utf-8")
@@ -76,10 +76,10 @@ def fetch_innertube_metadata(video_id: str) -> Optional[dict]:
             data=payload,
             headers={
                 "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
             }
         )
-        with urllib.request.urlopen(req, timeout=4) as response:
+        with urllib.request.urlopen(req, timeout=6) as response:
             if response.status == 200:
                 data = json.loads(response.read().decode("utf-8"))
                 vd = data.get("videoDetails")
