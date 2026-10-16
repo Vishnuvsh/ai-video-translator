@@ -52,6 +52,40 @@ def _format_duration(seconds: Optional[int]) -> Optional[str]:
     return f"{minutes:02d}:{secs:02d}"
 
 
+def get_cookie_file() -> Optional[str]:
+    """
+    Find or generate a path to cookies.txt if provided.
+    Supports:
+    1. Render secret file path: /etc/secrets/cookies.txt
+    2. Explicit env var path: YOUTUBE_COOKIES_FILE
+    3. Env var content: YOUTUBE_COOKIES (written to temp file)
+    4. Local file: ./cookies.txt or ../cookies.txt
+    """
+    candidates = [
+        "/etc/secrets/cookies.txt",
+        os.getenv("YOUTUBE_COOKIES_FILE"),
+        os.path.join(os.getcwd(), "cookies.txt"),
+        os.path.join(os.getcwd(), "backend", "cookies.txt"),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "cookies.txt"),
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path) and os.path.getsize(path) > 0:
+            return os.path.abspath(path)
+
+    raw_content = os.getenv("YOUTUBE_COOKIES") or os.getenv("YOUTUBE_COOKIES_CONTENT")
+    if raw_content:
+        temp_dir = tempfile.gettempdir()
+        temp_cookie_path = os.path.join(temp_dir, "yt_cookies.txt")
+        try:
+            with open(temp_cookie_path, "w", encoding="utf-8") as f:
+                f.write(raw_content)
+            return temp_cookie_path
+        except Exception:
+            pass
+
+    return None
+
+
 _METADATA_CACHE: dict[str, dict] = {}
 
 
@@ -176,6 +210,13 @@ def fetch_video_metadata(video_id: str) -> dict:
             "Accept-Language": "en-US,en;q=0.9",
         }
     }
+
+    cookie_file = get_cookie_file()
+    if cookie_file:
+        ydl_opts["cookiefile"] = cookie_file
+    proxy = os.getenv("YOUTUBE_PROXY")
+    if proxy:
+        ydl_opts["proxy"] = proxy
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -339,7 +380,22 @@ def fetch_youtube_captions(video_id: str) -> Optional[dict]:
     # Strategy 2: youtube_transcript_api modern .fetch()
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
-        api = YouTubeTranscriptApi()
+        import requests
+        session = requests.Session()
+        cookie_file = get_cookie_file()
+        if cookie_file:
+            import http.cookiejar
+            try:
+                jar = http.cookiejar.MozillaCookieJar(cookie_file)
+                jar.load(ignore_discard=True, ignore_expires=True)
+                session.cookies = jar
+            except Exception:
+                pass
+        proxy = os.getenv("YOUTUBE_PROXY")
+        if proxy:
+            session.proxies = {"http": proxy, "https": proxy}
+
+        api = YouTubeTranscriptApi(http_client=session)
         res = api.fetch(video_id)
         raw = res.to_raw_data() if hasattr(res, "to_raw_data") else None
         if raw:
@@ -438,6 +494,13 @@ def download_audio(video_id: str, progress_callback=None) -> str:
             'preferredquality': '128',
         }],
     }
+
+    cookie_file = get_cookie_file()
+    if cookie_file:
+        ydl_opts['cookiefile'] = cookie_file
+    proxy = os.getenv("YOUTUBE_PROXY")
+    if proxy:
+        ydl_opts['proxy'] = proxy
     
     # Use aria2c for faster downloading if available on the system
     if shutil.which("aria2c"):
