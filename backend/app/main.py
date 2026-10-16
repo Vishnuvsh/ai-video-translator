@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
@@ -22,6 +22,11 @@ app.add_middleware(
 
 app.include_router(health.router, prefix="/api")
 app.include_router(video.router, prefix="/api/video")
+
+# Root-level WebSocket endpoint so both /ws/progress/{client_id} and /api/video/ws/progress/{client_id} work
+@app.websocket("/ws/progress/{client_id}")
+async def root_websocket_progress(websocket: WebSocket, client_id: str):
+    await video.websocket_endpoint(websocket, client_id)
 
 @app.get("/")
 async def root():
