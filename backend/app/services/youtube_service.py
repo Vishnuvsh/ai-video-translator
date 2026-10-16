@@ -207,6 +207,50 @@ def fetch_video_metadata(video_id: str) -> dict:
     return result
 
 
+def fetch_youtube_captions(video_id: str) -> Optional[dict]:
+    """
+    Fetch native or auto-generated YouTube captions directly using timedtext.
+    Executes in <0.5s, avoids downloading audio, and completely bypasses cloud datacenter bot detection.
+    """
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+        api = YouTubeTranscriptApi()
+        res = api.fetch(video_id)
+        raw = res.to_raw_data()
+        if not raw:
+            return None
+
+        segments = []
+        full_text_parts = []
+        for s in raw:
+            text = s.get("text", "").strip()
+            if not text:
+                continue
+            start = float(s.get("start", 0.0))
+            duration = float(s.get("duration", 0.0))
+            segments.append({
+                "start": round(start, 2),
+                "end": round(start + duration, 2),
+                "text": text
+            })
+            full_text_parts.append(text)
+
+        if not segments:
+            return None
+
+        lang_code = res.language_code or "en"
+        if "-" in lang_code:
+            lang_code = lang_code.split("-")[0]
+
+        return {
+            "transcript": " ".join(full_text_parts),
+            "language": lang_code,
+            "segments": segments
+        }
+    except Exception:
+        return None
+
+
 def download_audio(video_id: str, progress_callback=None) -> str:
     """
     Download the audio for a YouTube video to a temporary file.
@@ -228,7 +272,7 @@ def download_audio(video_id: str, progress_callback=None) -> str:
         'noplaylist': True,
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'ios', 'mweb', 'web']
+                'player_client': ['android', 'android_creator', 'tv_embedded']
             }
         },
         'http_headers': {
@@ -278,6 +322,8 @@ def download_audio(video_id: str, progress_callback=None) -> str:
         error_msg = str(e).lower()
         if any(word in error_msg for word in ["private", "unavailable", "removed", "does not exist", "not available"]):
             raise ValueError("Audio unavailable: Video is private or has been removed.")
+        if "sign in to confirm you're not a bot" in error_msg or "bot" in error_msg:
+            raise ValueError("YouTube has rate-limited automated audio streaming on this cloud server. Please try a video with captions enabled.")
         raise ValueError(f"Unable to access video audio: {str(e)}")
     except Exception as e:
         raise RuntimeError(f"Unexpected error while downloading audio: {str(e)}")

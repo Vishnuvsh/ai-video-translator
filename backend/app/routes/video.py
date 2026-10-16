@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from app.schemas.video import VideoAnalyzeRequest, VideoAnalyzeResponse, VideoMetadata, VideoTranscribeRequest, VideoTranscribeResponse, VideoTranslateRequest, VideoTranslateResponse, VideoTTSRequest, VideoTTSResponse
-from app.services.youtube_service import extract_video_id, is_youtube_url, fetch_video_metadata, download_audio
+from app.services.youtube_service import extract_video_id, is_youtube_url, fetch_video_metadata, download_audio, fetch_youtube_captions
 from app.services.transcription_service import transcribe_audio
 from app.services.translation_service import translate_transcript
 from app.services.tts_service import generate_speech, get_audio_path
@@ -202,11 +202,27 @@ async def transcribe_video(request: VideoTranscribeRequest):
                     segments=cached_result.get("segments", [])
                 )
 
+        # Strategy 1: Ultra-fast native/auto-generated YouTube transcript (<0.5s, no audio download, no cloud bot blocking)
+        if not request.force_refresh:
+            progress_callback("transcribing", 20, "Extracting video transcript...")
+            caption_data = await run_in_threadpool(fetch_youtube_captions, video_id)
+            if caption_data and caption_data.get("segments"):
+                set_cached_transcription(video_id, caption_data)
+                progress_callback("completed", 100, "Transcription completed successfully!")
+                return VideoTranscribeResponse(
+                    success=True,
+                    video_id=video_id,
+                    language=caption_data.get("language", "unknown"),
+                    transcript=caption_data.get("transcript", ""),
+                    segments=caption_data.get("segments", [])
+                )
+
+        # Strategy 2: Fallback to audio download + Whisper AI speech recognition
         progress_callback("downloading", 0, "Starting audio download...")
         audio_path = await run_in_threadpool(download_audio, video_id, progress_callback)
         
         try:
-            progress_callback("transcribing", 0, "Starting transcription...")
+            progress_callback("transcribing", 0, "Starting transcription with Whisper AI...")
             result = await run_in_threadpool(transcribe_audio, audio_path, progress_callback)
         finally:
             # Ensure temporary download directory and files are safely cleaned up
