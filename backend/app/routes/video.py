@@ -299,7 +299,8 @@ async def translate_video_transcript(request: VideoTranslateRequest):
     needed_languages = [
         lang for lang in request.target_languages 
         if lang not in cached_translations or (
-            isinstance(cached_translations[lang], dict) and cached_translations[lang].get("text", "").startswith("Error:")
+            (isinstance(cached_translations[lang], dict) and cached_translations[lang].get("text", "").startswith("Error:")) or
+            (isinstance(cached_translations[lang], str) and cached_translations[lang].startswith("Error:"))
         )
     ]
     
@@ -319,7 +320,10 @@ async def translate_video_transcript(request: VideoTranslateRequest):
                 # Cache successful translations
                 successful_to_cache = {
                     k: v for k, v in new_translations.items()
-                    if not (isinstance(v, dict) and v.get("text", "").startswith("Error:"))
+                    if not (
+                        (isinstance(v, dict) and v.get("text", "").startswith("Error:")) or
+                        (isinstance(v, str) and v.startswith("Error:"))
+                    )
                 }
                 if successful_to_cache:
                     set_cached_translations(video_id, successful_to_cache)
@@ -473,4 +477,3 @@ async def debug_captions(video_id: str):
         logs.append(f"yt_dlp error: {type(ye).__name__}: {str(ye)}")
 
     return {"video_id": video_id, "logs": logs}
-

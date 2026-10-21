@@ -125,7 +125,13 @@ const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
           ...(prev || {}),
           ...response.data.translations
         }));
-        setCachedLanguages((prev) => Array.from(new Set([...prev, ...Object.keys(response.data.translations)])));
+        const successfulLangs = Object.entries(response.data.translations)
+          .filter(([_, v]) => {
+            const text = typeof v === 'string' ? v : v?.text;
+            return text && !text.startsWith('Error:');
+          })
+          .map(([k]) => k);
+        setCachedLanguages((prev) => Array.from(new Set([...prev, ...successfulLangs])));
       }
     } catch (err) {
       setError(err.response?.data?.detail || 'Translation service is temporarily unavailable. Please try again.');

@@ -53,64 +53,126 @@ def _call_llm_with_retry(client: OpenAI, messages: list[dict], max_tokens: int =
     raise RuntimeError(f"Translation failed on all candidate models. Last error: {str(last_error)}")
 
 
-def _translate_single_segment_batch(client, batch, target_lang_name):
-    texts_to_translate = [s.get("text", "") for s in batch]
+def _translate_single_segment_text(client: OpenAI, text: str, target_lang_name: str) -> str:
+    """Translates a single text segment safely."""
+    if not text.strip():
+        return text
     prompt = (
-        f"Translate the following subtitle segments into {target_lang_name}.\n"
+        f"Translate the following subtitle text into {target_lang_name}.\n"
         "Requirements:\n"
-        "- Preserve meaning exactly.\n"
-        "- Output MUST be a valid JSON array of strings.\n"
-        "- Each string in the output array MUST correspond to the exact translation of the segment at that index in the input array.\n"
-        "- Do NOT output any Markdown blocks, just raw JSON (start with [ and end with ]).\n\n"
-        f"Input JSON Array:\n{json.dumps(texts_to_translate)}"
+        "- Preserve meaning accurately.\n"
+        "- Output ONLY the translated text without quotes or explanations.\n\n"
+        f"Text:\n{text}"
+    )
+    messages = [
+        {"role": "system", "content": "You are a professional subtitle translator."},
+        {"role": "user", "content": prompt}
+    ]
+    try:
+        translated = _call_llm_with_retry(client, messages, max_tokens=300, temperature=0.3).strip()
+        if (translated.startswith('"') and translated.endswith('"')) or (translated.startswith("'") and translated.endswith("'")):
+            translated = translated[1:-1].strip()
+        return translated
+    except Exception:
+        return text
+
+
+def _translate_single_segment_batch(client: OpenAI, batch: list[dict], target_lang_name: str) -> list[dict]:
+    """
+    Translates a batch of subtitle segments with 100% segment preservation guarantee.
+    Uses indexed JSON mapping, recursive divide-and-conquer on count/format mismatch,
+    and single-segment translation base cases.
+    """
+    if not batch:
+        return []
+
+    if len(batch) == 1:
+        seg = batch[0]
+        translated = _translate_single_segment_text(client, seg.get("text", ""), target_lang_name)
+        return [{
+            "start": seg["start"],
+            "end": seg["end"],
+            "text": translated
+        }]
+
+    texts_dict = {str(i): s.get("text", "") for i, s in enumerate(batch)}
+    prompt = (
+        f"Translate the following {len(batch)} subtitle segments into {target_lang_name}.\n"
+        "Requirements:\n"
+        f"1. Exactly {len(batch)} numbered segments are provided (keys \"0\" to \"{len(batch)-1}\").\n"
+        "2. Output MUST be a valid JSON object mapping each key string (\"0\", \"1\", ...) to its translated text.\n"
+        f"3. You MUST provide every key from \"0\" to \"{len(batch)-1}\". Do not merge, skip, or renumber keys.\n"
+        "4. Return ONLY the raw JSON object, without markdown formatting or code blocks.\n\n"
+        f"Input:\n{json.dumps(texts_dict, ensure_ascii=False, indent=2)}"
     )
 
     messages = [
-        {"role": "system", "content": "You are a professional video transcript translator. You only output valid JSON arrays."},
+        {"role": "system", "content": "You are a professional subtitle translator. You always output valid raw JSON objects matching the input keys."},
         {"role": "user", "content": prompt}
     ]
 
-    content = _call_llm_with_retry(client, messages, max_tokens=2500, temperature=0.3)
+    try:
+        content = _call_llm_with_retry(client, messages, max_tokens=2500, temperature=0.3)
+        clean_content = content.strip()
+        if clean_content.startswith("```"):
+            clean_content = re.sub(r"^```[a-zA-Z]*\n?", "", clean_content)
+            clean_content = re.sub(r"\n?```$", "", clean_content).strip()
 
-    # Clean markdown formatting if model wrapped in ```json
-    clean_content = content.strip()
-    if clean_content.startswith("```"):
-        clean_content = re.sub(r"^```[a-zA-Z]*\n?", "", clean_content)
-        clean_content = re.sub(r"\n?```$", "", clean_content).strip()
+        start_brace = clean_content.find('{')
+        end_brace = clean_content.rfind('}')
+        start_bracket = clean_content.find('[')
+        end_bracket = clean_content.rfind(']')
 
-    # Robust JSON array extraction
-    start_idx = clean_content.find('[')
-    end_idx = clean_content.rfind(']')
+        # Case 1: JSON Object matching {"0": "...", "1": "..."}
+        if start_brace != -1 and end_brace > start_brace and (start_bracket == -1 or start_brace < start_bracket):
+            json_str = clean_content[start_brace:end_brace+1]
+            try:
+                parsed_data = json.loads(json_str)
+            except Exception:
+                fixed_str = re.sub(r',\s*\}', '}', json_str)
+                parsed_data = json.loads(fixed_str)
 
-    # Auto-repair if closing bracket was missed
-    if start_idx != -1 and end_idx <= start_idx:
-        last_quote = clean_content.rfind('"')
-        if last_quote > start_idx:
-            clean_content = clean_content[:last_quote+1] + ']'
-            end_idx = len(clean_content) - 1
+            if isinstance(parsed_data, dict):
+                results = []
+                missing_any = False
+                for i, seg in enumerate(batch):
+                    key = str(i)
+                    if key in parsed_data and isinstance(parsed_data[key], str):
+                        results.append({
+                            "start": seg["start"],
+                            "end": seg["end"],
+                            "text": parsed_data[key].strip()
+                        })
+                    else:
+                        missing_any = True
+                        break
+                if not missing_any and len(results) == len(batch):
+                    return results
 
-    if start_idx != -1 and end_idx > start_idx:
-        json_str = clean_content[start_idx:end_idx+1]
-        try:
-            translated_texts = json.loads(json_str)
-        except json.JSONDecodeError:
-            # Try to fix unescaped characters or trailing commas
-            fixed_str = re.sub(r',\s*\]', ']', json_str)
-            translated_texts = json.loads(fixed_str)
-    else:
-        raise ValueError(f"No JSON array found in LLM response. Raw response: {content[:200]}")
+        # Case 2: JSON Array matching ["...", "..."]
+        if start_bracket != -1 and end_bracket > start_bracket:
+            json_str = clean_content[start_bracket:end_bracket+1]
+            try:
+                parsed_list = json.loads(json_str)
+            except Exception:
+                fixed_str = re.sub(r',\s*\]', ']', json_str)
+                parsed_list = json.loads(fixed_str)
 
-    if not isinstance(translated_texts, list) or len(translated_texts) != len(batch):
-        raise ValueError(f"Expected {len(batch)} segments but received {len(translated_texts) if isinstance(translated_texts, list) else 'invalid format'}.")
+            if isinstance(parsed_list, list) and len(parsed_list) == len(batch):
+                return [{
+                    "start": seg["start"],
+                    "end": seg["end"],
+                    "text": str(parsed_list[i]).strip()
+                } for i, seg in enumerate(batch)]
 
-    batch_result = []
-    for i, seg in enumerate(batch):
-        batch_result.append({
-            "start": seg["start"],
-            "end": seg["end"],
-            "text": translated_texts[i]
-        })
-    return batch_result
+    except Exception:
+        pass
+
+    # Divide-and-conquer fallback if anything went wrong or keys were missing:
+    mid = len(batch) // 2
+    left = _translate_single_segment_batch(client, batch[:mid], target_lang_name)
+    right = _translate_single_segment_batch(client, batch[mid:], target_lang_name)
+    return left + right
 
 
 def _translate_language(client, target_lang_code: str, transcript: str, segments: list[dict], source_language: str) -> dict:
@@ -127,7 +189,7 @@ def _translate_language(client, target_lang_code: str, transcript: str, segments
     target_lang_name = get_language_name(target_lang_code)
 
     if segments:
-        segment_batches = chunk_segments(segments, max_length=800)
+        segment_batches = chunk_segments(segments, max_length=500, max_segments=8)
         translated_segments = []
 
         for batch in segment_batches:
@@ -201,15 +263,15 @@ def translate_transcript(transcript: str, segments: list[dict], source_language:
                     
     return translations
 
-def chunk_segments(segments: list[dict], max_length: int = 800) -> list[list[dict]]:
-    """Group segments into batches based on total text length."""
+def chunk_segments(segments: list[dict], max_length: int = 500, max_segments: int = 8) -> list[list[dict]]:
+    """Group segments into batches based on total text length and segment count."""
     batches = []
     current_batch = []
     current_length = 0
     
     for seg in segments:
         text_len = len(seg.get("text", ""))
-        if current_length + text_len > max_length and current_batch:
+        if (current_length + text_len > max_length or len(current_batch) >= max_segments) and current_batch:
             batches.append(current_batch)
             current_batch = []
             current_length = 0
