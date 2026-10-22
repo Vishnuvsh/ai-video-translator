@@ -479,17 +479,14 @@ def download_audio(video_id: str, progress_callback=None) -> str:
     temp_dir = tempfile.mkdtemp(prefix="ytdl_")
     output_template = os.path.join(temp_dir, f"{video_id}.%(ext)s")
     
+    cookie_file = get_cookie_file()
+    
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': output_template,
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'android_creator', 'tv_embedded']
-            }
-        },
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
@@ -501,9 +498,20 @@ def download_audio(video_id: str, progress_callback=None) -> str:
         }],
     }
 
-    cookie_file = get_cookie_file()
     if cookie_file:
         ydl_opts['cookiefile'] = cookie_file
+        ydl_opts['extractor_args'] = {
+            'youtube': {
+                'player_client': ['web', 'web_creator', 'mweb', 'ios']
+            }
+        }
+    else:
+        ydl_opts['extractor_args'] = {
+            'youtube': {
+                'player_client': ['android', 'android_creator', 'tv_embedded']
+            }
+        }
+
     proxy = os.getenv("YOUTUBE_PROXY")
     if proxy:
         ydl_opts['proxy'] = proxy

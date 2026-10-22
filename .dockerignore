@@ -1,0 +1,8 @@
+**/venv
+**/__pycache__
+**/.pytest_cache
+**/.cache
+**/node_modules
+**/.git
+**/.env
+**/generated_audio/*.mp3
