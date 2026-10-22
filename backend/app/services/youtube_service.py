@@ -500,17 +500,6 @@ def download_audio(video_id: str, progress_callback=None) -> str:
 
     if cookie_file:
         ydl_opts['cookiefile'] = cookie_file
-        ydl_opts['extractor_args'] = {
-            'youtube': {
-                'player_client': ['web', 'web_creator', 'mweb', 'ios']
-            }
-        }
-    else:
-        ydl_opts['extractor_args'] = {
-            'youtube': {
-                'player_client': ['android', 'android_creator', 'tv_embedded']
-            }
-        }
 
     proxy = os.getenv("YOUTUBE_PROXY")
     if proxy:

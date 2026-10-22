@@ -8,5 +8,5 @@ async def health_check():
     return {
         "status": "ok",
         "message": "AI Video Translator API is running",
-        "version": "2.1.0"
+        "version": "2.2.0"
     }
