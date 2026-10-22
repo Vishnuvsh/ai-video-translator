@@ -6,6 +6,13 @@ import os
 # Load environment variables from .env file
 load_dotenv()
 
+# Automatically provide FFmpeg and FFprobe in PATH without requiring system root/sudo
+try:
+    import static_ffmpeg
+    static_ffmpeg.add_paths(weak=True)
+except Exception:
+    pass
+
 from app.routes import health
 from app.routes import video
 
