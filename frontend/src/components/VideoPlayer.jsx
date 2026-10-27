@@ -8,9 +8,8 @@ const VideoPlayer = ({ url, segments = [], autoPlay = true }) => {
   const wrapperRef = useRef(null);
   const intervalRef = useRef(null);
   const subtitleListRef = useRef(null);
-  // Unique ID for YouTube iframe element
-  const uniqueId = React.useId().replace(/[^a-zA-Z0-9_-]/g, '');
-  const playerDivId = useRef(`yt-player-${uniqueId}`);
+  // Use a unique ID for each mount to avoid DOM conflicts
+  const playerDivId = useRef(`yt-player-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
 
   // Extract video ID from url - support multiple YouTube URL formats
   const extractVideoId = (inputUrl) => {
@@ -21,9 +20,6 @@ const VideoPlayer = ({ url, segments = [], autoPlay = true }) => {
     // Short URL (youtu.be)
     const shortMatch = inputUrl.match(/youtu\.be\/([^?&]+)/);
     if (shortMatch) return shortMatch[1];
-    // Shorts URL
-    const shortsMatch = inputUrl.match(/shorts\/([^?&/]+)/);
-    if (shortsMatch) return shortsMatch[1];
     // Embed URL
     const embedMatch = inputUrl.match(/embed\/([^?&]+)/);
     if (embedMatch) return embedMatch[1];
@@ -77,9 +73,8 @@ const VideoPlayer = ({ url, segments = [], autoPlay = true }) => {
     playerContainer.style.top = '0';
     playerContainer.style.left = '0';
 
-    const wrapper = wrapperRef.current;
-    if (wrapper) {
-      wrapper.appendChild(playerContainer);
+    if (wrapperRef.current) {
+      wrapperRef.current.appendChild(playerContainer);
     }
 
     const initPlayer = () => {
@@ -182,7 +177,7 @@ const VideoPlayer = ({ url, segments = [], autoPlay = true }) => {
         if (playerRef.current && typeof playerRef.current.destroy === 'function') {
           playerRef.current.destroy();
         }
-      } catch {
+      } catch (e) {
         // Ignore destroy errors - the iframe may already be gone
       }
       playerRef.current = null;
@@ -192,10 +187,10 @@ const VideoPlayer = ({ url, segments = [], autoPlay = true }) => {
 
       // Remove the player container div safely
       try {
-        if (wrapper && playerContainer.parentNode === wrapper) {
-          wrapper.removeChild(playerContainer);
+        if (wrapperRef.current && playerContainer.parentNode === wrapperRef.current) {
+          wrapperRef.current.removeChild(playerContainer);
         }
-      } catch {
+      } catch (e) {
         // Ignore if already removed
       }
     };

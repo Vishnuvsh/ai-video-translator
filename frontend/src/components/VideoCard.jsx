@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import TranslationSection from './TranslationSection';
 
-const VideoCard = ({ videoUrl, video, onReset, onTranscribe, transcribeState, transcriptData, progressData, error }) => {
+const VideoCard = ({ videoUrl, video, onReset, onTranscribe, transcribeState, transcriptData, progressData }) => {
   const isTranscribing = transcribeState === 'preparing' || transcribeState === 'transcribing';
 
   const copyToClipboard = () => {
@@ -73,7 +73,7 @@ const VideoCard = ({ videoUrl, video, onReset, onTranscribe, transcribeState, tr
               </p>
             )}
             <p className="text-gray-600">
-              <span className="font-semibold text-gray-800">Duration:</span> {video.duration_formatted || (video.duration ? `${video.duration}s` : 'Available')}
+              <span className="font-semibold text-gray-800">Duration:</span> {video.duration_formatted || `${video.duration}s`}
             </p>
             {video.upload_date && (
               <p className="text-gray-600">
@@ -120,12 +120,6 @@ const VideoCard = ({ videoUrl, video, onReset, onTranscribe, transcribeState, tr
                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
              </div>
            </div>
-        </div>
-      {/* Error alert area */}
-      {error && (
-        <div className="mt-4 p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-sm flex items-center space-x-2 animate-fade-in-up">
-          <svg className="w-5 h-5 flex-shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          <span className="font-medium">{error}</span>
         </div>
       )}
 
@@ -198,11 +192,7 @@ const VideoCard = ({ videoUrl, video, onReset, onTranscribe, transcribeState, tr
       )}
 
       {transcriptData && (
-        <TranslationSection 
-          transcriptData={transcriptData} 
-          videoUrl={videoUrl || `https://www.youtube.com/watch?v=${video.video_id}`}
-          videoId={video.video_id}
-        />
+        <TranslationSection transcriptData={transcriptData} videoUrl={`https://www.youtube.com/watch?v=${video.video_id}`} />
       )}
     </motion.div>
   );

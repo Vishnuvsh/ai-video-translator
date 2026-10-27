@@ -3,42 +3,11 @@ import api from '../services/api';
 import { SUPPORTED_LANGUAGES, getLanguageName } from '../config/languages';
 import VideoPlayer from './VideoPlayer';
 
-const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
-  const currentVideoId = videoId || transcriptData?.video_id;
+const TranslationSection = ({ transcriptData, videoUrl }) => {
   const [selectedLanguages, setSelectedLanguages] = useState([]);
   const [isTranslating, setIsTranslating] = useState(false);
   const [translations, setTranslations] = useState(null);
-  const [cachedLanguages, setCachedLanguages] = useState([]);
   const [error, setError] = useState('');
-
-  // Auto-fetch any already saved translations when mounting or when videoId changes
-  useEffect(() => {
-    const fetchExistingTranslations = async () => {
-      if (!currentVideoId) return;
-      try {
-        const response = await api.get(`/api/video/translations/${currentVideoId}`);
-        if (response.data.success && response.data.translations && Object.keys(response.data.translations).length > 0) {
-          const validCached = {};
-          const validKeys = [];
-          Object.entries(response.data.translations).forEach(([k, v]) => {
-            const text = typeof v === 'string' ? v : v?.text;
-            if (text && !text.startsWith('Error:')) {
-              validCached[k] = v;
-              validKeys.push(k);
-            }
-          });
-          if (validKeys.length > 0) {
-            setTranslations((prev) => ({ ...(prev || {}), ...validCached }));
-            setCachedLanguages(validKeys);
-            setSelectedLanguages((prev) => Array.from(new Set([...prev, ...validKeys])));
-          }
-        }
-      } catch {
-        // Silently ignore if no cache exists yet
-      }
-    };
-    fetchExistingTranslations();
-  }, [currentVideoId]);
 
   // Phase 5 States
   const [audioFiles, setAudioFiles] = useState({});
@@ -61,7 +30,7 @@ const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
         top: Math.max(0, targetScrollY),
         behavior: 'smooth'
       });
-    } catch {
+    } catch (e) {
       subtitlePlayerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
@@ -113,7 +82,6 @@ const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
     
     try {
       const response = await api.post('/api/video/translate', {
-        video_id: currentVideoId,
         transcript: transcriptData.transcript,
         segments: transcriptData.segments || [],
         source_language: sourceLanguage,
@@ -121,17 +89,7 @@ const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
       });
 
       if (response.data.success) {
-        setTranslations((prev) => ({
-          ...(prev || {}),
-          ...response.data.translations
-        }));
-        const successfulLangs = Object.entries(response.data.translations)
-          .filter(([_, v]) => {
-            const text = typeof v === 'string' ? v : v?.text;
-            return text && !text.startsWith('Error:');
-          })
-          .map(([k]) => k);
-        setCachedLanguages((prev) => Array.from(new Set([...prev, ...successfulLangs])));
+        setTranslations(response.data.translations);
       }
     } catch (err) {
       setError(err.response?.data?.detail || 'Translation service is temporarily unavailable. Please try again.');
@@ -166,18 +124,13 @@ const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
         voice: 'alloy' // Default voice, can be expanded later
       });
 
-      if (response.data.success && response.data.audio_url) {
+      if (response.data.success) {
         setAudioFiles((prev) => ({ ...prev, [langCode]: response.data.audio_url }));
-      } else {
-        setVoiceErrors((prev) => ({
-          ...prev, 
-          [langCode]: response.data?.message || 'AI Voice generation will be available in an upcoming update.'
-        }));
       }
     } catch (err) {
       setVoiceErrors((prev) => ({
         ...prev, 
-        [langCode]: err.response?.data?.detail || err.response?.data?.message || 'Voice generation is coming soon in an upcoming update.'
+        [langCode]: err.response?.data?.detail || 'Voice generation failed. Please try again.'
       }));
     } finally {
       setGeneratingVoices((prev) => ({ ...prev, [langCode]: false }));
@@ -196,9 +149,8 @@ const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
 
   const getFullAudioUrl = (path) => {
     if (!path) return '';
-    const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/+$/, '');
-    const cleanPath = path.startsWith('/') ? path : `/${path}`;
-    return `${baseUrl}${cleanPath}`;
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+    return `${baseUrl}${path}`;
   };
 
   if (!transcriptData) return null;
@@ -210,54 +162,38 @@ const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
       <div className="mb-6">
         <p className="text-sm text-gray-700 font-medium mb-3">Select target languages:</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {SUPPORTED_LANGUAGES.map((lang) => {
-            const isCached = cachedLanguages.includes(lang.code);
-            return (
-              <label key={lang.code} className="flex items-center space-x-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-                  checked={selectedLanguages.includes(lang.code)}
-                  onChange={() => handleLanguageToggle(lang.code)}
-                  disabled={isTranslating}
-                />
-                <span className="text-sm text-gray-700">{lang.name}</span>
-                {isCached && (
-                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-medium px-1.5 py-0.5 rounded-full" title="Already translated (loads instantly)">
-                    Saved
-                  </span>
-                )}
-              </label>
-            );
-          })}
+          {SUPPORTED_LANGUAGES.map((lang) => (
+            <label key={lang.code} className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                checked={selectedLanguages.includes(lang.code)}
+                onChange={() => handleLanguageToggle(lang.code)}
+                disabled={isTranslating}
+              />
+              <span className="text-sm text-gray-700">{lang.name}</span>
+            </label>
+          ))}
         </div>
       </div>
 
-      {(() => {
-        const hasUncached = selectedLanguages.some(l => !cachedLanguages.includes(l));
-        const allCached = selectedLanguages.length > 0 && !hasUncached;
-        return (
-          <button
-            onClick={handleTranslate}
-            disabled={isTranslating || selectedLanguages.length === 0}
-            className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white font-medium py-2.5 px-6 rounded-lg shadow hover-lift transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover-lift-none disabled:transform-none mb-4 flex items-center justify-center min-w-[200px]"
-          >
-            {isTranslating ? (
-              <span className="flex items-center space-x-2">
-                <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" style={{ animationDuration: '0.5s' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span className="animate-pulse">Translating...</span>
-              </span>
-            ) : allCached ? (
-              '⚡ Load Saved Translations (Instant)'
-            ) : (
-              'Translate Transcript'
-            )}
-          </button>
-        );
-      })()}
+      <button
+        onClick={handleTranslate}
+        disabled={isTranslating || selectedLanguages.length === 0}
+        className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white font-medium py-2.5 px-6 rounded-lg shadow hover-lift transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover-lift-none disabled:transform-none mb-4 flex items-center justify-center min-w-[200px]"
+      >
+        {isTranslating ? (
+          <span className="flex items-center space-x-2">
+            <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" style={{ animationDuration: '0.5s' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span className="animate-pulse">Translating...</span>
+          </span>
+        ) : (
+          'Translate Transcript'
+        )}
+      </button>
 
       {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
@@ -291,10 +227,9 @@ const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
             <h4 className="text-lg font-bold text-gray-900">Translated Versions</h4>
             <button
               onClick={handleGenerateAllVoices}
-              className="w-full sm:w-auto text-xs bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 font-medium py-1.5 px-3 rounded hover-lift transition-all duration-300 text-center flex items-center justify-center space-x-1.5"
+              className="w-full sm:w-auto text-sm bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 font-medium py-1.5 px-4 rounded hover-lift transition-all duration-300 text-center"
             >
-              <span>Generate All Voices</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded-full">Soon</span>
+              Generate All Voices
             </button>
           </div>
           
@@ -339,8 +274,7 @@ const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
                       <button
                         onClick={() => handleGenerateVoice(langCode, textContent)}
                         disabled={generatingVoices[langCode]}
-                        title="AI Voiceover (Coming Soon)"
-                        className="w-full sm:flex-1 md:flex-none text-center text-xs bg-amber-500 hover:bg-amber-600 text-white font-medium py-1.5 px-3 rounded hover-lift transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover-lift-none disabled:transform-none flex items-center justify-center min-w-[120px]"
+                        className="w-full sm:flex-1 md:flex-none text-center text-xs bg-amber-600 hover:bg-amber-700 text-white font-medium py-1.5 px-3 rounded hover-lift transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover-lift-none disabled:transform-none flex items-center justify-center min-w-[120px]"
                       >
                         {generatingVoices[langCode] ? (
                           <span className="flex items-center space-x-1.5">
@@ -348,11 +282,9 @@ const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
-                            <span className="animate-pulse">Checking...</span>
+                            <span className="animate-pulse">Generating...</span>
                           </span>
-                        ) : (
-                          <span>Voiceover (Soon)</span>
-                        )}
+                        ) : 'Generate Voice'}
                       </button>
                     )}
                   </div>

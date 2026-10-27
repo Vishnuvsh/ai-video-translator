@@ -1,6 +1,6 @@
 import os
 import math
-from app.config import get_openai_client
+from openai import OpenAI
 
 def transcribe_audio(file_path: str, progress_callback=None) -> dict:
     """
@@ -16,7 +16,7 @@ def transcribe_audio(file_path: str, progress_callback=None) -> dict:
             raise ValueError("Audio file not found.")
 
         file_size = os.path.getsize(file_path)
-        client = get_openai_client()
+        client = OpenAI()
         
         def _extract_segments(transcription_obj, time_offset=0.0):
             extracted = []
