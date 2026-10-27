@@ -1,5 +1,6 @@
 fastapi
-uvicorn
+uvicorn[standard]
+websockets
 pydantic
 pydantic-settings
 yt-dlp
@@ -7,3 +8,4 @@ openai
 pydub
 python-dotenv
 youtube-transcript-api
+static-ffmpeg

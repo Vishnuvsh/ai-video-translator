@@ -3,6 +3,7 @@ import re
 import json
 import tempfile
 import shutil
+import subprocess
 import urllib.request
 import urllib.error
 from typing import Optional
@@ -214,7 +215,12 @@ def fetch_video_metadata(video_id: str) -> dict:
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
-        }
+        },
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "web"],
+            }
+        },
     }
 
     cookie_file = get_cookie_file()
@@ -466,34 +472,134 @@ def fetch_youtube_captions(video_id: str) -> Optional[dict]:
 
 
 
+def _download_audio_innertube(video_id: str, temp_dir: str, progress_callback=None) -> Optional[str]:
+    """
+    Directly download audio stream from YouTube's official Android InnerTube endpoint.
+    Bypasses datacenter IP blocks, CAPTCHA challenges, and web bot detection on cloud servers.
+    """
+    try:
+        url = "https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
+        payload = json.dumps({
+            "videoId": video_id,
+            "context": {
+                "client": {
+                    "clientName": "ANDROID",
+                    "clientVersion": "20.10.38"
+                }
+            }
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
+            }
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            if response.status != 200:
+                return None
+            data = json.loads(response.read().decode("utf-8"))
+
+        formats = data.get("streamingData", {}).get("adaptiveFormats", [])
+        audio_formats = [f for f in formats if "audio" in f.get("mimeType", "") and f.get("url")]
+        if not audio_formats:
+            return None
+
+        # Sort to pick highest bitrate audio stream
+        audio_formats.sort(key=lambda x: x.get("bitrate", 0), reverse=True)
+        stream_url = audio_formats[0]["url"]
+        content_length = int(audio_formats[0].get("contentLength", 0))
+
+        raw_path = os.path.join(temp_dir, f"{video_id}.raw")
+        out_mp3 = os.path.join(temp_dir, f"{video_id}.mp3")
+
+        req_stream = urllib.request.Request(
+            stream_url,
+            headers={"User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)"}
+        )
+        with urllib.request.urlopen(req_stream, timeout=25) as s_resp, open(raw_path, "wb") as f:
+            downloaded = 0
+            chunk_size = 128 * 1024
+            while True:
+                chunk = s_resp.read(chunk_size)
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+                if progress_callback and content_length > 0:
+                    pct = min(99.0, round((downloaded / content_length) * 100, 1))
+                    progress_callback("downloading", pct, f"Downloading audio... {pct:.1f}%")
+
+        if not os.path.exists(raw_path) or os.path.getsize(raw_path) == 0:
+            return None
+
+        if progress_callback:
+            progress_callback("downloading", 100.0, "Download complete. Extracting audio...")
+
+        ffmpeg_bin = shutil.which("ffmpeg") or "ffmpeg"
+        conv = subprocess.run(
+            [ffmpeg_bin, "-y", "-i", raw_path, "-vn", "-b:a", "128k", out_mp3],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        try:
+            if os.path.exists(raw_path):
+                os.remove(raw_path)
+        except Exception:
+            pass
+
+        if conv.returncode == 0 and os.path.exists(out_mp3) and os.path.getsize(out_mp3) > 0:
+            return out_mp3
+
+    except Exception:
+        pass
+    return None
+
+
 def download_audio(video_id: str, progress_callback=None) -> str:
     """
     Download the audio for a YouTube video to a temporary file.
-    Returns the absolute path to the downloaded audio file.
-    The caller is responsible for deleting the file after use.
+    Uses multi-layered strategy:
+    1. Direct Android InnerTube audio stream (immune to cloud IP blocks)
+    2. Fallback to yt-dlp with mobile client simulation and cookies support
     """
-    url = f"https://www.youtube.com/watch?v={video_id}"
-    
-    # Create a temporary directory that won't be deleted automatically
-    # so we can return the file path and let the caller clean it up.
     temp_dir = tempfile.mkdtemp(prefix="ytdl_")
+
+    # Strategy 1: Direct Android InnerTube stream extraction (unblockable on cloud servers)
+    try:
+        direct_file = _download_audio_innertube(video_id, temp_dir, progress_callback)
+        if direct_file and os.path.exists(direct_file):
+            return direct_file
+    except Exception:
+        pass
+
+    # Strategy 2: yt-dlp with Android/iOS client fallback
+    url = f"https://www.youtube.com/watch?v={video_id}"
     output_template = os.path.join(temp_dir, f"{video_id}.%(ext)s")
-    
+    cookie_file = get_cookie_file()
+
+    extractor_args = {
+        'youtube': {
+            'player_client': ['android', 'ios', 'web'],
+        }
+    }
+    po_token = os.getenv("YOUTUBE_PO_TOKEN")
+    if po_token:
+        extractor_args['youtube']['po_token'] = [f"web+{po_token}"]
+
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': output_template,
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'android_creator', 'tv_embedded']
-            }
-        },
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
         },
+        'extractor_args': extractor_args,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -501,18 +607,18 @@ def download_audio(video_id: str, progress_callback=None) -> str:
         }],
     }
 
-    cookie_file = get_cookie_file()
     if cookie_file:
         ydl_opts['cookiefile'] = cookie_file
+
     proxy = os.getenv("YOUTUBE_PROXY")
     if proxy:
         ydl_opts['proxy'] = proxy
-    
-    # Use aria2c for faster downloading if available on the system
+
+    # Use aria2c for faster downloading if available
     if shutil.which("aria2c"):
         ydl_opts['external_downloader'] = 'aria2c'
         ydl_opts['external_downloader_args'] = ['-x', '16', '-k', '1M']
-        
+
     def yt_progress_hook(d):
         if progress_callback:
             if d['status'] == 'downloading':
@@ -528,24 +634,23 @@ def download_audio(video_id: str, progress_callback=None) -> str:
                 progress_callback('downloading', 100.0, 'Download complete. Extracting audio...')
 
     ydl_opts['progress_hooks'] = [yt_progress_hook]
-    
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
-            
-        # The file will be named {video_id}.mp3 because of the postprocessor
+
         expected_file = os.path.join(temp_dir, f"{video_id}.mp3")
         if not os.path.exists(expected_file):
             raise RuntimeError("Audio file was not created successfully.")
-            
+
         return expected_file
-        
+
     except yt_dlp.utils.DownloadError as e:
         error_msg = str(e).lower()
         if any(word in error_msg for word in ["private", "unavailable", "removed", "does not exist", "not available"]):
             raise ValueError("Audio unavailable: Video is private or has been removed.")
         if "sign in to confirm you're not a bot" in error_msg or "bot" in error_msg:
-            raise ValueError("YouTube has rate-limited automated audio streaming on this cloud server. Please try a video with captions enabled.")
+            raise ValueError("YouTube has rate-limited automated audio streaming on this cloud server. Please provide YOUTUBE_COOKIES in environment variables.")
         raise ValueError(f"Unable to access video audio: {str(e)}")
     except Exception as e:
         raise RuntimeError(f"Unexpected error while downloading audio: {str(e)}")
