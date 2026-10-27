@@ -307,6 +307,7 @@ function App() {
                       transcribeState={transcribeState}
                       transcriptData={transcriptData}
                       progressData={progressData}
+                      error={error}
                     />
                   </Suspense>
                 </motion.div>

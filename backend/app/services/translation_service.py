@@ -3,6 +3,7 @@ import time
 import os
 import json
 from openai import OpenAI
+from app.config import get_openai_client
 from app.config.language_config import is_language_supported, get_language_name, normalize_lang_code
 
 import concurrent.futures
@@ -242,7 +243,7 @@ def translate_transcript(transcript: str, segments: list[dict], source_language:
     Translate the transcript and its segments into the specified target languages in parallel.
     """
     target_languages = list(set(target_languages))
-    client = OpenAI()
+    client = get_openai_client()
     translations = {}
     
     if len(target_languages) == 1:
