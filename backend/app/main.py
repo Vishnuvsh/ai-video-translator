@@ -9,7 +9,7 @@ load_dotenv()
 # Automatically provide FFmpeg and FFprobe in PATH without requiring system root/sudo
 try:
     import static_ffmpeg
-    static_ffmpeg.add_paths(weak=True)
+    static_ffmpeg.add_paths()
 except Exception:
     pass
 

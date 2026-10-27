@@ -537,7 +537,16 @@ def _download_audio_innertube(video_id: str, temp_dir: str, progress_callback=No
         if progress_callback:
             progress_callback("downloading", 100.0, "Download complete. Extracting audio...")
 
-        ffmpeg_bin = shutil.which("ffmpeg") or "ffmpeg"
+        ffmpeg_bin = shutil.which("ffmpeg")
+        if not ffmpeg_bin:
+            try:
+                import static_ffmpeg
+                static_ffmpeg.add_paths()
+                ffmpeg_bin = shutil.which("ffmpeg")
+            except Exception:
+                pass
+        ffmpeg_bin = ffmpeg_bin or "ffmpeg"
+
         conv = subprocess.run(
             [ffmpeg_bin, "-y", "-i", raw_path, "-vn", "-b:a", "128k", out_mp3],
             stdout=subprocess.DEVNULL,
