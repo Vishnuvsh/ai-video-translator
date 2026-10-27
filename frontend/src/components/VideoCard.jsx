@@ -73,7 +73,7 @@ const VideoCard = ({ videoUrl, video, onReset, onTranscribe, transcribeState, tr
               </p>
             )}
             <p className="text-gray-600">
-              <span className="font-semibold text-gray-800">Duration:</span> {video.duration_formatted || `${video.duration}s`}
+              <span className="font-semibold text-gray-800">Duration:</span> {video.duration_formatted || (video.duration ? `${video.duration}s` : 'Available')}
             </p>
             {video.upload_date && (
               <p className="text-gray-600">
@@ -192,7 +192,11 @@ const VideoCard = ({ videoUrl, video, onReset, onTranscribe, transcribeState, tr
       )}
 
       {transcriptData && (
-        <TranslationSection transcriptData={transcriptData} videoUrl={`https://www.youtube.com/watch?v=${video.video_id}`} />
+        <TranslationSection 
+          transcriptData={transcriptData} 
+          videoUrl={videoUrl || `https://www.youtube.com/watch?v=${video.video_id}`}
+          videoId={video.video_id}
+        />
       )}
     </motion.div>
   );
