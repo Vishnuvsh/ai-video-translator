@@ -589,17 +589,8 @@ def download_audio(video_id: str, progress_callback=None) -> str:
     output_template = os.path.join(temp_dir, f"{video_id}.%(ext)s")
     cookie_file = get_cookie_file()
 
-    extractor_args = {
-        'youtube': {
-            'player_client': ['android', 'ios', 'web'],
-        }
-    }
-    po_token = os.getenv("YOUTUBE_PO_TOKEN")
-    if po_token:
-        extractor_args['youtube']['po_token'] = [f"web+{po_token}"]
-
     ydl_opts = {
-        'format': 'bestaudio/best',
+        'format': 'bestaudio/best/ba/b',
         'outtmpl': output_template,
         'quiet': True,
         'no_warnings': True,
@@ -608,7 +599,6 @@ def download_audio(video_id: str, progress_callback=None) -> str:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
         },
-        'extractor_args': extractor_args,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -618,6 +608,16 @@ def download_audio(video_id: str, progress_callback=None) -> str:
 
     if cookie_file:
         ydl_opts['cookiefile'] = cookie_file
+    else:
+        extractor_args = {
+            'youtube': {
+                'player_client': ['android', 'ios', 'web'],
+            }
+        }
+        po_token = os.getenv("YOUTUBE_PO_TOKEN")
+        if po_token:
+            extractor_args['youtube']['po_token'] = [f"web+{po_token}"]
+        ydl_opts['extractor_args'] = extractor_args
 
     proxy = os.getenv("YOUTUBE_PROXY")
     if proxy:
