@@ -124,16 +124,16 @@ function App() {
             </div>
 
             {/* Nav Toggle Pill */}
-            <nav className="hidden sm:flex bg-gray-100/80 backdrop-blur-md p-1 rounded-full border border-gray-200/50">
+            <nav className="hidden sm:flex items-center gap-3 bg-gray-100/80 backdrop-blur-md p-1.5 px-2 rounded-full border border-gray-200/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)]">
               <button
                 onClick={() => setCurrentView('home')}
-                className={`${currentView === 'home' ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-gray-500 hover:text-[#1D1D1F]'} px-5 py-1 rounded-full text-sm font-medium transition-all duration-300`}
+                className={`${currentView === 'home' ? 'bg-white text-[#1D1D1F] shadow-sm font-semibold' : 'text-gray-600 hover:text-[#1D1D1F] hover:bg-white/50'} px-6 py-1.5 rounded-full text-sm font-medium transition-all duration-300`}
               >
                 Home
               </button>
               <button
                 onClick={() => setCurrentView('about')}
-                className={`${currentView === 'about' ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-gray-500 hover:text-[#1D1D1F]'} px-5 py-1 rounded-full text-sm font-medium transition-all duration-300 ml-1`}
+                className={`${currentView === 'about' ? 'bg-white text-[#1D1D1F] shadow-sm font-semibold' : 'text-gray-600 hover:text-[#1D1D1F] hover:bg-white/50'} px-6 py-1.5 rounded-full text-sm font-medium transition-all duration-300`}
               >
                 About
               </button>
