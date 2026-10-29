@@ -9,8 +9,8 @@ import concurrent.futures
 
 # Models ordered by quality with automatic rate-limit fallback
 FALLBACK_MODELS = [
-    "openai/gpt-oss-120b",
     "qwen/qwen3.8-27b",
+    "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
 ]
 

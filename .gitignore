@@ -22,3 +22,9 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# App temporary files
+backend/generated_audio/
+backend/.cache/
+*.mp3
+
