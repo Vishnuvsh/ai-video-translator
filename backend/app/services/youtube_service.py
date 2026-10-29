@@ -212,13 +212,16 @@ def fetch_video_metadata(video_id: str) -> dict:
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
+        "nocheckcertificate": True,
+        "geo_bypass": True,
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
             "Accept-Language": "en-US,en;q=0.9",
         },
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "web"],
+                "player_client": ["ios", "android_creator", "mweb", "android"],
+                "player_skip": ["web"],
             }
         },
     }
@@ -389,7 +392,7 @@ def fetch_youtube_captions(video_id: str) -> Optional[dict]:
     except Exception:
         pass
 
-    # Strategy 2: youtube_transcript_api modern .fetch()
+    # Strategy 2: Multi-lingual youtube_transcript_api with automatic language discovery
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         import requests
@@ -408,17 +411,59 @@ def fetch_youtube_captions(video_id: str) -> Optional[dict]:
             session.proxies = {"http": proxy, "https": proxy}
 
         api = YouTubeTranscriptApi(http_client=session)
-        res = api.fetch(video_id)
-        raw = res.to_raw_data() if hasattr(res, "to_raw_data") else None
-        if raw:
+
+        selected_transcript = None
+        try:
+            transcript_list = api.list(video_id)
+            # Priority 1: English manual
+            try:
+                selected_transcript = transcript_list.find_manually_created_transcript(['en', 'en-US', 'en-GB'])
+            except Exception:
+                pass
+            # Priority 2: English auto-generated
+            if not selected_transcript:
+                try:
+                    selected_transcript = transcript_list.find_generated_transcript(['en', 'en-US', 'en-GB'])
+                except Exception:
+                    pass
+            # Priority 3: Any manual transcript
+            if not selected_transcript:
+                for t in transcript_list:
+                    if not getattr(t, 'is_generated', True):
+                        selected_transcript = t
+                        break
+            # Priority 4: First available transcript in any language
+            if not selected_transcript:
+                selected_transcript = next(iter(transcript_list), None)
+        except Exception:
+            pass
+
+        fetched_data = None
+        detected_lang = "en"
+        if selected_transcript:
+            detected_lang = getattr(selected_transcript, 'language_code', 'en') or 'en'
+            fetched_data = selected_transcript.fetch()
+        else:
+            try:
+                fetched_data = api.fetch(video_id)
+                detected_lang = getattr(fetched_data, 'language_code', 'en') or 'en'
+            except Exception:
+                pass
+
+        if fetched_data:
             segments = []
             full_text_parts = []
-            for s in raw:
-                text = s.get("text", "").strip()
+            for s in fetched_data:
+                if isinstance(s, dict):
+                    text = s.get("text", "").strip()
+                    start = float(s.get("start", 0.0))
+                    duration = float(s.get("duration", 0.0))
+                else:
+                    text = getattr(s, "text", "").strip()
+                    start = float(getattr(s, "start", 0.0))
+                    duration = float(getattr(s, "duration", 0.0))
                 if not text:
                     continue
-                start = float(s.get("start", 0.0))
-                duration = float(s.get("duration", 0.0))
                 segments.append({
                     "start": round(start, 2),
                     "end": round(start + duration, 2),
@@ -427,44 +472,13 @@ def fetch_youtube_captions(video_id: str) -> Optional[dict]:
                 full_text_parts.append(text)
 
             if segments:
-                lang_code = getattr(res, "language_code", "en") or "en"
-                if "-" in lang_code:
-                    lang_code = lang_code.split("-")[0]
+                if "-" in detected_lang:
+                    detected_lang = detected_lang.split("-")[0]
                 return {
                     "transcript": " ".join(full_text_parts),
-                    "language": lang_code,
+                    "language": detected_lang,
                     "segments": segments
                 }
-    except Exception:
-        pass
-
-    # Strategy 3: youtube_transcript_api legacy .get_transcript()
-    try:
-        from youtube_transcript_api import YouTubeTranscriptApi
-        if hasattr(YouTubeTranscriptApi, "get_transcript"):
-            raw = YouTubeTranscriptApi.get_transcript(video_id)
-            if raw:
-                segments = []
-                full_text_parts = []
-                for s in raw:
-                    text = s.get("text", "").strip()
-                    if not text:
-                        continue
-                    start = float(s.get("start", 0.0))
-                    duration = float(s.get("duration", 0.0))
-                    segments.append({
-                        "start": round(start, 2),
-                        "end": round(start + duration, 2),
-                        "text": text
-                    })
-                    full_text_parts.append(text)
-
-                if segments:
-                    return {
-                        "transcript": " ".join(full_text_parts),
-                        "language": "en",
-                        "segments": segments
-                    }
     except Exception:
         pass
 
@@ -582,7 +596,8 @@ def download_audio(video_id: str, progress_callback=None) -> str:
 
     extractor_args = {
         'youtube': {
-            'player_client': ['android', 'ios', 'web'],
+            'player_client': ['ios', 'android_creator', 'mweb', 'android'],
+            'player_skip': ['web'],  # Never use desktop web player on cloud IPs to avoid bot detection
         }
     }
     po_token = os.getenv("YOUTUBE_PO_TOKEN")
@@ -595,8 +610,10 @@ def download_audio(video_id: str, progress_callback=None) -> str:
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
+        'nocheckcertificate': True,
+        'geo_bypass': True,
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
             'Accept-Language': 'en-US,en;q=0.9',
         },
         'extractor_args': extractor_args,
