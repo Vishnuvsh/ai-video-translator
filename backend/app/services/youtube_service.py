@@ -62,6 +62,41 @@ def get_cookie_file() -> Optional[str]:
     3. Env var content: YOUTUBE_COOKIES (written to temp file)
     4. Local file: ./cookies.txt or ../cookies.txt
     """
+def _normalize_netscape_cookies(raw_text: str) -> str:
+    """
+    Sanitizes and normalizes raw cookie strings into valid Netscape HTTP Cookie format.
+    Automatically repairs spaces that were converted from tabs by web dashboards (like Render),
+    and ensures the official Netscape header is present.
+    """
+    if not raw_text or not raw_text.strip():
+        return ""
+
+    formatted = ["# Netscape HTTP Cookie File\n# Automatically formatted by ai-video-translator\n"]
+    for line in raw_text.strip().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) >= 7:
+            domain, sub, path, sec, exp, name = parts[:6]
+            val = " ".join(parts[6:])
+            formatted.append(f"{domain}\t{sub}\t{path}\t{sec}\t{exp}\t{name}\t{val}\n")
+        elif len(parts) == 6:
+            domain, sub, path, sec, exp, name = parts
+            formatted.append(f"{domain}\t{sub}\t{path}\t{sec}\t{exp}\t{name}\t\n")
+
+    return "".join(formatted)
+
+
+def get_cookie_file() -> Optional[str]:
+    """
+    Resolves the cookies file path for yt-dlp authentication.
+    Supports:
+    1. Render secret file path: /etc/secrets/cookies.txt
+    2. Explicit env var path: YOUTUBE_COOKIES_FILE
+    3. Env var content: YOUTUBE_COOKIES (written to temp file)
+    4. Local file: ./cookies.txt or ../cookies.txt
+    """
     candidates = [
         "/etc/secrets/cookies.txt",
         os.getenv("YOUTUBE_COOKIES_FILE"),
@@ -72,9 +107,12 @@ def get_cookie_file() -> Optional[str]:
     for path in candidates:
         if path and os.path.isfile(path) and os.path.getsize(path) > 0:
             try:
-                # Copy to writable temp directory because yt-dlp attempts to write/update cookies
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                normalized = _normalize_netscape_cookies(content)
                 temp_cookie_path = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
-                shutil.copyfile(path, temp_cookie_path)
+                with open(temp_cookie_path, "w", encoding="utf-8") as f:
+                    f.write(normalized if normalized.count("\t") > 0 else content)
                 return temp_cookie_path
             except Exception:
                 return os.path.abspath(path)
@@ -84,8 +122,9 @@ def get_cookie_file() -> Optional[str]:
         temp_dir = tempfile.gettempdir()
         temp_cookie_path = os.path.join(temp_dir, "yt_cookies.txt")
         try:
+            normalized = _normalize_netscape_cookies(raw_content)
             with open(temp_cookie_path, "w", encoding="utf-8") as f:
-                f.write(raw_content)
+                f.write(normalized if normalized.count("\t") > 0 else raw_content)
             return temp_cookie_path
         except Exception:
             pass
