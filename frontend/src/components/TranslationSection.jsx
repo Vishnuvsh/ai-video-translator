@@ -11,7 +11,14 @@ const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
   const [cachedLanguages, setCachedLanguages] = useState([]);
   const [error, setError] = useState('');
 
-  // Auto-fetch any already saved translations when mounting or when videoId changes
+  // Reset translations whenever videoId changes so fresh transcribe starts clean
+  useEffect(() => {
+    setTranslations(null);
+    setSelectedLanguages([]);
+    setError('');
+  }, [currentVideoId]);
+
+  // Check which languages are already cached on backend for fast lookup
   useEffect(() => {
     const fetchExistingTranslations = async () => {
       if (!currentVideoId) return;
@@ -28,9 +35,9 @@ const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
             }
           });
           if (validKeys.length > 0) {
-            setTranslations((prev) => ({ ...(prev || {}), ...validCached }));
             setCachedLanguages(validKeys);
-            setSelectedLanguages((prev) => Array.from(new Set([...prev, ...validKeys])));
+            // Do NOT display cached translations on mount.
+            // Only show translations when user explicitly selects a language and clicks Translate.
           }
         }
       } catch {
@@ -121,10 +128,8 @@ const TranslationSection = ({ transcriptData, videoUrl, videoId }) => {
       });
 
       if (response.data.success) {
-        setTranslations((prev) => ({
-          ...(prev || {}),
-          ...response.data.translations
-        }));
+        // Show ONLY the languages the user explicitly selected and translated
+        setTranslations(response.data.translations);
         const successfulLangs = Object.entries(response.data.translations)
           .filter(([_, v]) => {
             const text = typeof v === 'string' ? v : v?.text;

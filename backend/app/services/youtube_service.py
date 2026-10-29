@@ -385,25 +385,14 @@ def fetch_youtube_captions(video_id: str) -> Optional[dict]:
             tracks = captions_data.get("captionTracks", [])
 
             if tracks:
-                # Select best track: manual English > auto English > any manual > first track
+                # Select original source track: prefer creator manual captions first, then original speech audio captions
+                # Preserve the original spoken language of the video without forcing auto-translation to English
                 chosen_track = None
                 for t in tracks:
-                    lang = t.get("languageCode", "")
-                    kind = t.get("kind", "")
-                    if lang.startswith("en") and kind != "asr":
+                    if t.get("kind") != "asr":
                         chosen_track = t
                         break
-                if not chosen_track:
-                    for t in tracks:
-                        if t.get("languageCode", "").startswith("en"):
-                            chosen_track = t
-                            break
-                if not chosen_track:
-                    for t in tracks:
-                        if t.get("kind") != "asr":
-                            chosen_track = t
-                            break
-                if not chosen_track:
+                if not chosen_track and tracks:
                     chosen_track = tracks[0]
 
                 raw_url = chosen_track.get("baseUrl")
@@ -454,26 +443,16 @@ def fetch_youtube_captions(video_id: str) -> Optional[dict]:
         selected_transcript = None
         try:
             transcript_list = api.list(video_id)
-            # Priority 1: English manual
-            try:
-                selected_transcript = transcript_list.find_manually_created_transcript(['en', 'en-US', 'en-GB'])
-            except Exception:
-                pass
-            # Priority 2: English auto-generated
-            if not selected_transcript:
-                try:
-                    selected_transcript = transcript_list.find_generated_transcript(['en', 'en-US', 'en-GB'])
-                except Exception:
-                    pass
-            # Priority 3: Any manual transcript
+            # Priority 1: Any original manual transcript created by the author
+            for t in transcript_list:
+                if not getattr(t, 'is_generated', True):
+                    selected_transcript = t
+                    break
+            # Priority 2: Original auto-generated speech transcript
             if not selected_transcript:
                 for t in transcript_list:
-                    if not getattr(t, 'is_generated', True):
-                        selected_transcript = t
-                        break
-            # Priority 4: First available transcript in any language
-            if not selected_transcript:
-                selected_transcript = next(iter(transcript_list), None)
+                    selected_transcript = t
+                    break
         except Exception:
             pass
 
